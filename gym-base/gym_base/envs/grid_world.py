@@ -72,7 +72,7 @@ class GridWorldEnv(gym.Env):
         direction = self._action_to_direction[action]
         self._agent_location = self.get_next_location(direction)
 
-        reward = self.calc_reward()  # TODO
+        reward = self.calc_reward(action)  # TODO
         terminated = np.array_equal(
             self._agent_location, self._target_location)
 
@@ -89,8 +89,23 @@ class GridWorldEnv(gym.Env):
             self._agent_location + direction, 0, self.size - 1
         )
 
-    def calc_reward(self):  # TODO
-        return 1
+    def calc_reward(self, action):  # TODO
+        # base reward on action taken and how close the object is to the goal after the action
+        # 1 unit of distance from goal after action = -1 reward
+        # 2 units of distance from goal after action = -2 reward etc...
+        # -1000 if action gets object stuck under tunnel
+        # -1000 if action gets object to fall off of table
+        #
+        #calc distance to goal
+        object_distance_to_goal = np.linalg.norm(self._agent_location - self._target_location, ord=1)
+        reward = -object_distance_to_goal
+        # check to see if object is under tunnel
+        if self.object_under_tunnel():  # TODO
+            reward = -1000
+        # check to see if object is off table
+        if self.object_off_table():  # TODO
+            reward = -1000
+        return reward
 
     def render(self):
         if self.render_mode == "rgb_array":
