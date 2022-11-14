@@ -7,11 +7,10 @@ import random
 
 
 class GridWorldEnv(gym.Env):
-    class Action:
-        R = np.array([1, 0])
-        U = np.array([0, 1])
-        L = np.array([-1, 0])
-        D = np.array([0, -1])
+    class Mode:
+        GRASP = 0
+        PUSH = 1
+        POKE = 2
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
@@ -26,12 +25,14 @@ class GridWorldEnv(gym.Env):
             "obstacle":
             spaces.Box(0, size - 1, shape=(2, ), dtype=int),
         })
-        self.action_space = spaces.Discrete(4)  # TODO
-        self._action_to_direction = {
-            0: self.Action.R,
-            1: self.Action.U,
-            2: self.Action.L,
-            3: self.Action.D,
+
+        self.action_space = spaces.Dict({"mode": spaces.Discrete(
+            3), "target_pos": spaces.Tuple((spaces.Discrete(2), spaces.Discrete(3)))})
+
+        self._action_mode = {
+            0: self.Mode.GRASP,
+            1: self.Mode.PUSH,
+            2: self.Mode.POKE,
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -68,9 +69,11 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
 
-    def step(self, action):
-        direction = self._action_to_direction[action]
-        self._agent_location = self.get_next_location(direction)
+    def step(self, action): 
+        # action = {"mode": 0, "target_pos": (1, 2)}
+        mode = self._action_mode[action["mode"]]
+        target_pos = action["target_pos"]
+        self._agent_location = self.get_next_location(mode, target_pos)
 
         reward = self.calc_reward()  # TODO
         terminated = np.array_equal(
@@ -84,7 +87,7 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def get_next_location(self, direction):
+    def get_next_location(self, mode, target_pos):
         return np.clip(
             self._agent_location + direction, 0, self.size - 1
         )
