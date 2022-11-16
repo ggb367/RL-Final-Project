@@ -5,13 +5,10 @@ import pygame
 import numpy as np
 import random
 
+from gym_base.envs.grid_world.modes import ModeHandler
+
 
 class GridWorldEnv(gym.Env):
-    class Mode:
-        GRASP = 0
-        PUSH = 1
-        POKE = 2
-
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode=None, size=4):
@@ -25,14 +22,15 @@ class GridWorldEnv(gym.Env):
             "obstacle":
             spaces.Box(0, size - 1, shape=(2, ), dtype=int),
         })
+        self.mode_handler = ModeHandler(grid_size=size)
 
         self.action_space = spaces.Dict({"mode": spaces.Discrete(
-            3), "target_pos": spaces.Tuple((spaces.Discrete(2), spaces.Discrete(3)))})
+            3), "pos": spaces.Tuple((spaces.Discrete(2), spaces.Discrete(3)))})
 
         self._action_mode = {
-            0: self.Mode.GRASP,
-            1: self.Mode.PUSH,
-            2: self.Mode.POKE,
+            0: self.mode_handler.Mode.GRASP,
+            1: self.mode_handler.Mode.PUSH,
+            2: self.mode_handler.Mode.POKE,
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -69,11 +67,13 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
 
-    def step(self, action): 
-        # action = {"mode": 0, "target_pos": (1, 2)}
+    def step(self, action):
+        # action = {"mode": 0, "pos": (1, 2)}
         mode = self._action_mode[action["mode"]]
-        target_pos = action["target_pos"]
-        self._agent_location = self.get_next_location(mode, target_pos)
+        dest = np.array(action["pos"])
+        
+        self._agent_location = self.mode_handler.move(observation=self._get_obs(),
+        mode=mode, dest= dest)
 
         reward = self.calc_reward()  # TODO
         terminated = np.array_equal(
@@ -86,11 +86,6 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, reward, terminated, False, info
-
-    def get_next_location(self, mode, target_pos):
-        return np.clip(
-            self._agent_location + direction, 0, self.size - 1
-        )
 
     def calc_reward(self):  # TODO
         return 1
