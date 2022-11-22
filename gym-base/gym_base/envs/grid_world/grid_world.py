@@ -53,7 +53,8 @@ class GridWorldEnv(gym.Env):
     def _get_info(self):
         return {
             "distance":
-            np.linalg.norm(self._object_location - self._target_location, ord=1)
+            np.linalg.norm(self._object_location -
+                           self._target_location, ord=1)
         }
 
     def reset(self, seed=None, options=None):
@@ -61,11 +62,15 @@ class GridWorldEnv(gym.Env):
 
         self._robot_arm_location = np.array([0, 0])
         self._object_location = np.array([1, 0])
-        self._target_location = np.array([3, 3])
-        self._obstacles_location = (np.array([2, 2]),
-                                             np.array([1, 1]),
-                                             np.array([0, 1]))
+        self._target_location = np.array([3, 2])
+        self._obstacles_location = [np.array([2, 2]),
+                                    np.array([1, 1]),
+                                    np.array([0, 1])]
 
+        self.mode_handler.reset(self._robot_arm_location,
+                                self._object_location,
+                                self._target_location,
+                                self._obstacles_location)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -76,14 +81,14 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        # action = {"mode": 0, "pos": (1, 2)}
         mode = self._action_mode[action["mode"]]
         dest = np.array(action["pos"])
 
-        self._object_location = self.mode_handler.move(observation=self._get_obs(),
-                                                      mode=mode, dest=dest)
+        self._object_location = self.mode_handler.move(
+            start=self._object_location,
+            mode=mode, dest=dest)
 
-        reward = self.calc_reward()  # TODO
+        reward = self.calc_reward()
         terminated = np.array_equal(
             self._object_location, self._target_location)
 
