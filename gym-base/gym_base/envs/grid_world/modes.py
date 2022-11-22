@@ -11,17 +11,15 @@ class ModeHandler:
         POKE = 2
 
     class Range:  # TODO
-        GRASP = 3
+        GRASP = 4
+        POKE = 3
         PUSH = 2
-        POKE = 1
 
     class Direction:
         UP = np.array([0, 1])
         DOWN = np.array([0, -1])
         RIGHT = np.array([1, 0])
         LEFT = np.array([-1, 0])
-
-        ALL = [UP, DOWN, RIGHT, LEFT]
 
     def __init__(self, grid_size) -> None:
         self.grid_size = grid_size
@@ -42,54 +40,13 @@ class ModeHandler:
         elif mode == self.Mode.PUSH:
             return self.move_by_push(start, dest)
 
-    def get_neighbour_cells(self, cell):
-        neighbours = []
-        for dir in self.Direction.ALL:
-            neighbour = np.clip(cell + dir, 0, self.grid_size - 1)
-            neighbours.append(neighbour)
-        return neighbours
-
-    def find_furthest_reachable_cell_in_the_same_direction(self, start, dest, range):
-        start_to_dest_line = LineString([(start[0], start[1]),
-                                         (dest[0], dest[1])])
-        furthest_point = start_to_dest_line.interpolate(range)
-        furthest_cell = np.clip(np.around((furthest_point.x, furthest_point.y)),
-                                0, self.grid_size - 1).astype(int)
-        return furthest_cell
-
-    def get_move_candidates(self, start, dest, neighbours):
-        candids = [dest]
-        candids.extend(neighbours)
-        for i in range(len(candids)):
-            if self.is_obstacle(candids[i]):
-                candids[i] = start
-        return candids
-
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
             dest = self.find_furthest_reachable_cell_in_the_same_direction(
                 start, dest, self.Range.GRASP)
-        neighbours = self.get_neighbour_cells(dest)
+        neighbours = self.get_neighbour_cells_for_grasp(dest)
         candids = self.get_move_candidates(start, dest, neighbours)
-        # The probablity to move into the specified dest is 0.88 and 0.3 in the neighbour cells
         return random.choices(candids, (0.88, 0.3, 0.3, 0.3, 0.3), k=1)[0]
-
-    def is_obstacle(self, location):
-        for obs in self.obstacles_location:
-            if (obs == location).all():
-                return True
-        return False
-
-    def get_neighbours_for_poke_push(self, start, dest):
-        directions = [self.Direction.LEFT, self.Direction.RIGHT]
-        if start[0] == dest[0]:
-            directions = [self.Direction.UP, self.Direction.DOWN]
-
-        neighbours = []
-        for dir in directions:
-            neighbour = np.clip(dest + dir, 0, self.grid_size - 1)
-            neighbours.append(neighbour)
-        return neighbours
 
     def move_by_poke(self, start, dest):
         if not self.pos_is_in_range_for_poke(start, dest):
@@ -102,7 +59,14 @@ class ModeHandler:
         return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
 
     def move_by_push(self, start, dest):
-        return np.array([1, 0])
+        if not self.pos_is_in_range_for_push(start, dest):
+            dest = self.find_furthest_reachable_cell_in_the_same_direction(
+                start, dest, self.Range.PUSH)
+            if start[0] != dest[0] and start[1] != dest[1]:
+                print("ERROR: push action not valid")
+        neighbours = self.get_neighbours_for_poke_push(start, dest)
+        candids = self.get_move_candidates(start, dest, neighbours)
+        return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]
 
     def pos_is_in_range_for_grasp(self, start, dest):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
@@ -120,4 +84,50 @@ class ModeHandler:
         return False
 
     def pos_is_in_range_for_push(self, start, dest):
-        return True
+        robot_to_current = np.linalg.norm(start - self.robot_arm_location)
+        robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
+        if (start[0] == dest[0] or start[1] == dest[1]) and \
+                robot_to_current <= self.Range.PUSH and robot_to_dest <= self.Range.PUSH:
+            return True
+        return False
+
+    def get_neighbour_cells_for_grasp(self, cell):
+        neighbours = []
+        for dir in [self.Direction.UP, self.Direction.DOWN,
+                    self.Direction.RIGHT, self.Direction.LEFT]:
+            neighbour = np.clip(cell + dir, 0, self.grid_size - 1)
+            neighbours.append(neighbour)
+        return neighbours
+
+    def get_neighbours_for_poke_push(self, start, dest):
+        directions = [self.Direction.LEFT, self.Direction.RIGHT]
+        if start[0] == dest[0]:
+            directions = [self.Direction.UP, self.Direction.DOWN]
+
+        neighbours = []
+        for dir in directions:
+            neighbour = np.clip(dest + dir, 0, self.grid_size - 1)
+            neighbours.append(neighbour)
+        return neighbours
+
+    def is_obstacle(self, location):
+        for obs in self.obstacles_location:
+            if (obs == location).all():
+                return True
+        return False
+
+    def find_furthest_reachable_cell_in_the_same_direction(self, start, dest, range):
+        start_to_dest_line = LineString([(start[0], start[1]),
+                                         (dest[0], dest[1])])
+        furthest_point = start_to_dest_line.interpolate(range)
+        furthest_cell = np.clip(np.around((furthest_point.x, furthest_point.y)),
+                                0, self.grid_size - 1).astype(int)
+        return furthest_cell
+
+    def get_move_candidates(self, start, dest, neighbours):
+        candids = [dest]
+        candids.extend(neighbours)
+        for i in range(len(candids)):
+            if self.is_obstacle(candids[i]):
+                candids[i] = start
+        return candids
