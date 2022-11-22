@@ -25,7 +25,7 @@ class ModeHandler:
         self.grid_size = grid_size
 
     def move(self, observation, mode, dest):
-        current_pos = observation["agent"]
+        current_pos = observation["object"]
 
         if mode == self.Mode.GRASP:
             return self.move_by_grasp(current_pos, dest)
@@ -61,7 +61,8 @@ class ModeHandler:
         neighbours = self.get_neighbour_cells(dest)
         candids = [dest]
         candids.extend(neighbours)
-        return random.choices(candids, (0.88, 0.3, 0.3, 0.3, 0.3), k=1)[0]
+        chosen = random.choices(candids, (0.88, 0.3, 0.3, 0.3, 0.3), k=1)[0][0]
+        return chosen.astype(int)
 
     def move_by_poke(self, current_pos, dest):
         return np.array([1, 0])
