@@ -5,33 +5,35 @@ import pygame
 import numpy as np
 import random
 
+from gym_base.envs.grid_world.modes import ModeHandler
+
 
 class GridWorldEnv(gym.Env):
-    class Action:
-        R = np.array([1, 0])
-        U = np.array([0, 1])
-        L = np.array([-1, 0])
-        D = np.array([0, -1])
-
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode=None, size=4):
         self.size = size
         self.window_size = 512
         self.observation_space = spaces.Dict({
-            "agent":
+            "robot_arm":
+            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            "object":
             spaces.Box(0, size - 1, shape=(2, ), dtype=int),
             "target":
             spaces.Box(0, size - 1, shape=(2, ), dtype=int),
-            "obstacle":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            "obstacles":
+            spaces.Sequence(spaces.Box(0, size - 1, shape=(2, ), dtype=int)),
         })
-        self.action_space = spaces.Discrete(4)  # TODO
-        self._action_to_direction = {
-            0: self.Action.R,
-            1: self.Action.U,
-            2: self.Action.L,
-            3: self.Action.D,
+
+        self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
+                                         "pos": spaces.Tuple((spaces.Discrete(4),
+                                                              spaces.Discrete(4)))})
+        self.mode_handler = ModeHandler(grid_size=size)
+
+        self._action_mode = {
+            0: self.mode_handler.Mode.GRASP,
+            1: self.mode_handler.Mode.PUSH,
+            2: self.mode_handler.Mode.POKE,
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -42,23 +44,33 @@ class GridWorldEnv(gym.Env):
 
     def _get_obs(self):
         return {
-            "agent": self._agent_location,
+            "robot_arm": self._robot_arm_location,
+            "object": self._object_location,
             "target": self._target_location,
-            "obstacle": self._obstacle_location,
+            "obstacles": self._obstacles_location
         }
 
     def _get_info(self):
         return {
             "distance":
-            np.linalg.norm(self._agent_location - self._target_location, ord=1)
+            np.linalg.norm(self._object_location -
+                           self._target_location, ord=1)
         }
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._agent_location = np.array([1, 0])
-        self._target_location = np.array([3, 3])
-        self._obstacle_location = np.array([1, 2])
+        self._robot_arm_location = np.array([0, 0])
+        self._object_location = np.array([1, 0])
+        self._target_location = np.array([3, 2])
+        self._obstacles_location = [np.array([2, 2]),
+                                    np.array([1, 1]),
+                                    np.array([0, 1])]
+
+        self.mode_handler.reset(self._robot_arm_location,
+                                self._object_location,
+                                self._target_location,
+                                self._obstacles_location)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -69,12 +81,16 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        direction = self._action_to_direction[action]
-        self._agent_location = self.get_next_location(direction)
+        mode = self._action_mode[action["mode"]]
+        dest = np.array(action["pos"])
+
+        self._object_location = self.mode_handler.move(
+            start=self._object_location,
+            mode=mode, dest=dest)
 
         reward = self.calc_reward(action)  # TODO
         terminated = np.array_equal(
-            self._agent_location, self._target_location)
+            self._object_location, self._target_location)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -84,19 +100,13 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def get_next_location(self, direction):
-        return np.clip(
-            self._agent_location + direction, 0, self.size - 1
-        )
-
-    def calc_reward(self, action):  # TODO
+    def calc_reward(self):  # TODO
         # base reward on action taken and how close the object is to the goal after the action
         # 1 unit of distance from goal after action = -1 reward
         # 2 units of distance from goal after action = -2 reward etc...
         # -1000 if action gets object stuck under tunnel
         # -1000 if action gets object to fall off of table
-        #
-        #calc distance to goal
+        # calc distance to goal
         object_distance_to_goal = np.linalg.norm(self._agent_location - self._target_location, ord=1)
         reward = -object_distance_to_goal
         # check to see if object is under tunnel
@@ -138,7 +148,7 @@ class GridWorldEnv(gym.Env):
         pygame.draw.circle(
             canvas,
             (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
+            (self._object_location + 0.5) * pix_square_size,
             pix_square_size / 3,
         )
 
