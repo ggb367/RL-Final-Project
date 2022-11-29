@@ -10,7 +10,11 @@ class ModeHandler:
         PUSH = 1
         POKE = 2
 
-    class Range:  # TODO
+    # TODO: These are the maximum range an action can happen.
+    # Depending where the robot arm is placed and how far
+    # The start and initial are from the robot arm
+    # These ranges vary. The numbers are also arbitraty for the moment
+    class Range:
         GRASP = 4
         POKE = 3
         PUSH = 2
@@ -46,15 +50,14 @@ class ModeHandler:
 
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction(
-                start, dest, self.Range.GRASP)
+            return start
         neighbours = self.get_neighbour_cells_for_grasp(dest)
         candids = self.get_move_candidates(start, dest, neighbours)
         return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
 
     def move_by_poke(self, start, dest):
-        if not self.pos_is_in_range_for_poke(start, dest):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction(
+        if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
+            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
                 start, dest, self.Range.POKE)
             if start[0] != dest[0] and start[1] != dest[1]:
                 print("ERROR: poke action not valid")
@@ -63,8 +66,8 @@ class ModeHandler:
         return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
 
     def move_by_push(self, start, dest):
-        if not self.pos_is_in_range_for_push(start, dest):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction(
+        if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
+            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
                 start, dest, self.Range.PUSH)
             if start[0] != dest[0] and start[1] != dest[1]:
                 print("ERROR: push action not valid")
@@ -72,26 +75,18 @@ class ModeHandler:
         candids = self.get_move_candidates(start, dest, neighbours)
         return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]
 
+    def pos_in_range_for_poke_push(self, start, dest, range):
+        robot_to_current = np.linalg.norm(start - self.robot_arm_location)
+        current_to_dest = np.linalg.norm(start - dest)
+        if (start[0] == dest[0] or start[1] == dest[1]) and \
+                robot_to_current <= self.Range.GRASP and current_to_dest <= range:
+            return True
+        return False
+
     def pos_is_in_range_for_grasp(self, start, dest):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
         if robot_to_current <= self.Range.GRASP and robot_to_dest <= self.Range.GRASP:
-            return True
-        return False
-
-    def pos_is_in_range_for_poke(self, start, dest):
-        robot_to_current = np.linalg.norm(start - self.robot_arm_location)
-        robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
-        if (start[0] == dest[0] or start[1] == dest[1]) and \
-                robot_to_current <= self.Range.POKE and robot_to_dest <= self.Range.POKE:
-            return True
-        return False
-
-    def pos_is_in_range_for_push(self, start, dest):
-        robot_to_current = np.linalg.norm(start - self.robot_arm_location)
-        robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
-        if (start[0] == dest[0] or start[1] == dest[1]) and \
-                robot_to_current <= self.Range.PUSH and robot_to_dest <= self.Range.PUSH:
             return True
         return False
 
@@ -120,7 +115,7 @@ class ModeHandler:
                 return True
         return False
 
-    def find_furthest_reachable_cell_in_the_same_direction(self, start, dest, range):
+    def find_furthest_reachable_cell_in_the_same_direction_for_poke_push(self, start, dest, range):
         start_to_dest_line = LineString([(start[0], start[1]),
                                          (dest[0], dest[1])])
         furthest_point = start_to_dest_line.interpolate(range)
