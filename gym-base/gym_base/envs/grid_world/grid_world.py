@@ -130,10 +130,10 @@ class GridWorldEnv(gym.Env):
         reward += distance_traveled
         # check to see if object is under tunnel
         if self.object_under_tunnel():  # TODO
-            reward -= 1000  # TODO: making it -1000 might make it unstable, need to test it
+            reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
         # check to see if object is off table
         if self.object_off_table():  # TODO
-            reward -= 1000
+            reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
         return reward
 
     def render(self):

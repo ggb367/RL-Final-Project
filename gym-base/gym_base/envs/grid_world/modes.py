@@ -21,6 +21,10 @@ class ModeHandler:
         RIGHT = np.array([1, 0])
         LEFT = np.array([-1, 0])
 
+    class Reward:
+        OFF_TABLE = -1000
+        UNDER_TUNNEL = -1000
+
     def __init__(self, grid_size) -> None:
         self.grid_size = grid_size
 
