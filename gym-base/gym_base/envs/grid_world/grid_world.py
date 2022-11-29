@@ -12,6 +12,14 @@ class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode=None, size=4):
+        self._robot_arm_location = np.array([0, 0])
+        self._object_location = np.array([1, 0])
+        self._target_location = np.array([3, 2])
+        self._obstacles_location = [np.array([2, 2]),
+                                    np.array([1, 1]),
+                                    np.array([0, 1])]
+        self._prev_object_location = self._object_location.copy()
+
         self.size = size
         self.window_size = 512
         self.observation_space = spaces.Dict({
@@ -84,11 +92,13 @@ class GridWorldEnv(gym.Env):
         mode = self._action_mode[action["mode"]]
         dest = np.array(action["pos"])
 
+        self._prev_object_location = self._object_location.copy()
+
         self._object_location = self.mode_handler.move(
             start=self._object_location,
             mode=mode, dest=dest)
 
-        reward = self.calc_reward(action)  # TODO
+        reward = self.calc_reward()  # TODO
         terminated = np.array_equal(
             self._object_location, self._target_location)
 
@@ -101,20 +111,29 @@ class GridWorldEnv(gym.Env):
         return observation, reward, terminated, False, info
 
     def calc_reward(self):  # TODO
+        """
+        Calculate the reward for the current state.
+        """
         # base reward on action taken and how close the object is to the goal after the action
         # 1 unit of distance from goal after action = -1 reward
         # 2 units of distance from goal after action = -2 reward etc...
         # -1000 if action gets object stuck under tunnel
         # -1000 if action gets object to fall off of table
+
+        reward = 0
+
         # calc distance to goal
-        object_distance_to_goal = np.linalg.norm(self._agent_location - self._target_location, ord=1)
-        reward = -object_distance_to_goal
+        object_distance_to_goal = np.linalg.norm(self._object_location - self._target_location, ord=1)
+        reward -= object_distance_to_goal
+        # calc distance traveled
+        distance_traveled = np.linalg.norm(self._object_location - self._prev_object_location, ord=1)
+        reward += distance_traveled
         # check to see if object is under tunnel
         if self.object_under_tunnel():  # TODO
-            reward = -1000
+            reward -= 1000  # TODO: making it -1000 might make it unstable, need to test it
         # check to see if object is off table
         if self.object_off_table():  # TODO
-            reward = -1000
+            reward -= 1000
         return reward
 
     def render(self):
