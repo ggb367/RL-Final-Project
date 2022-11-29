@@ -46,7 +46,7 @@ class ModeHandler:
 
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
-            return dest
+            return start
         neighbours = self.get_neighbour_cells_for_grasp(dest)
         candids = self.get_move_candidates(start, dest, neighbours)
         return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
