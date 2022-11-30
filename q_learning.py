@@ -30,7 +30,7 @@ def q_learning(env):
             observation, reward, terminated, _, _ = env.step(env_action)
 
             next_state = observation['object']
-            
+
             Q[current_state[0], current_state[1], action] += alpha * (reward + gamma * np.max(
                 Q[next_state[0], next_state[1], :]) - Q[current_state[0], current_state[1], action])
 
@@ -38,13 +38,6 @@ def q_learning(env):
             if terminated:
                 break
     return Q
-
-
-def _env_action(action, grid_size):
-    mode = action % 3
-    index = np.floor(action/3)
-    pos = (int(index // grid_size), int(index % grid_size))
-    return {"mode": mode, "pos": pos}
 
 
 def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
@@ -56,17 +49,17 @@ def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
     return action
 
 
-def policy(Q):
-    action_to_direction = {
-        0: 'R',  # Right
-        1: 'U',  # Up
-        2: 'L',  # Left
-        3: 'D',  # Down
-    }
-    policy = np.chararray((4, 4), unicode=True)
-    for row in range(0, 4):
-        for col in range(0, 4):
+def policy(Q, grid_size):
+    policy = np.chararray((grid_size, grid_size), itemsize=100, unicode=True)
+    for row in range(0, grid_size):
+        for col in range(0, grid_size):
             best_action = np.argmax(Q[row, col, :])
-            policy[row, col] = action_to_direction[best_action]
-
+            policy[row, col] = f'{_env_action(best_action, grid_size)}'
     return policy
+
+
+def _env_action(action, grid_size):
+    mode = action % 3
+    index = np.floor(action/3)
+    pos = (int(index // grid_size), int(index % grid_size))
+    return {"mode": mode, "pos": pos}
