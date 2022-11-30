@@ -55,8 +55,6 @@ class ModeHandler:
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
             dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
                 start, dest, self.Range.POKE)
-            if start[0] != dest[0] and start[1] != dest[1]:
-                print("ERROR: poke action not valid")
         neighbours = self.get_neighbours_for_poke_push(start, dest)
         candids = self.get_move_candidates(start, dest, neighbours)
         return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
@@ -65,8 +63,6 @@ class ModeHandler:
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
             dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
                 start, dest, self.Range.PUSH)
-            if start[0] != dest[0] and start[1] != dest[1]:
-                print("ERROR: push action not valid")
         neighbours = self.get_neighbours_for_poke_push(start, dest)
         candids = self.get_move_candidates(start, dest, neighbours)
         return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]

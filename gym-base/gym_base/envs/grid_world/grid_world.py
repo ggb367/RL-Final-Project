@@ -6,30 +6,33 @@ import numpy as np
 import random
 
 from gym_base.envs.grid_world.modes import ModeHandler
+from gym_base.envs.grid_world.scenarios import ScenarioHandler
 
 
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=4):
-        self.size = size
+    def __init__(self, render_mode=None):
+        self.scenario = ScenarioHandler(scenario=1)
+
+        self.size = self.scenario.grid_size
         self.window_size = 512
         self.observation_space = spaces.Dict({
             "robot_arm":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "object":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "target":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "obstacles":
-            spaces.Sequence(spaces.Box(0, size - 1, shape=(2, ), dtype=int)),
+            spaces.Sequence(spaces.Box(0, self.size - 1, shape=(2, ), dtype=int)),
+            "object_graspable":
+            spaces.MultiBinary(1),
         })
-
         self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
-                                         "pos": spaces.Tuple((spaces.Discrete(4),
-                                                              spaces.Discrete(4)))})
-        self.mode_handler = ModeHandler(grid_size=size)
-
+                                         "pos": spaces.Tuple((spaces.Discrete(self.size),
+                                                              spaces.Discrete(self.size)))})
+        self.mode_handler = ModeHandler(grid_size=self.size)
         self._action_mode = {
             0: self.mode_handler.Mode.GRASP,
             1: self.mode_handler.Mode.PUSH,
@@ -47,7 +50,8 @@ class GridWorldEnv(gym.Env):
             "robot_arm": self._robot_arm_location,
             "object": self._object_location,
             "target": self._target_location,
-            "obstacles": self._obstacles_location
+            "obstacles": self._obstacles_location,
+            "object_graspable": self._object_graspable
         }
 
     def _get_info(self):
@@ -60,12 +64,11 @@ class GridWorldEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._robot_arm_location = np.array([0, 0])
-        self._object_location = np.array([1, 0])
-        self._target_location = np.array([3, 2])
-        self._obstacles_location = [np.array([2, 2]),
-                                    np.array([1, 1]),
-                                    np.array([0, 1])]
+        self._robot_arm_location = self.scenario.robot_arm_location
+        self._object_location = self.scenario.object_location
+        self._object_graspable = self.scenario.object_graspable
+        self._target_location = self.scenario.target_location
+        self._obstacles_location = self.scenario.obstacles_location
 
         self.mode_handler.reset(self._robot_arm_location,
                                 self._object_location,
@@ -79,6 +82,9 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, info
+    
+    def display_scenario(self):
+        self.scenario.display()
 
     def step(self, action):
         mode = self._action_mode[action["mode"]]
@@ -100,8 +106,10 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def calc_reward(self):  # TODO
-        return 1
+    def calc_reward(self):  # TODO: random numbers for testing purposes
+        if (self._object_location ==  self._target_location).all():
+            return 100
+        return -1
 
     def render(self):
         if self.render_mode == "rgb_array":
