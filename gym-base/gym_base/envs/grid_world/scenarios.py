@@ -40,7 +40,6 @@ class ScenarioHandler:
         self.target_location = np.array([3 , 3])
         self.obstacles_location = [np.array([3, 2]),
                                    np.array([1, 2]),
-                                   np.array([3, 3]),
                                    ]
 
     def setup_scenario_3(self):
