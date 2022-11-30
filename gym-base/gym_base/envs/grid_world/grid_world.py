@@ -12,27 +12,27 @@ from gym_base.envs.grid_world.scenarios import ScenarioHandler
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=10):
+    def __init__(self, render_mode=None):
         self.scenario = ScenarioHandler(scenario=1)
 
         self.size = self.scenario.grid_size
         self.window_size = 512
         self.observation_space = spaces.Dict({
             "robot_arm":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "object":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "target":
-            spaces.Box(0, size - 1, shape=(2, ), dtype=int),
+            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "obstacles":
-            spaces.Sequence(spaces.Box(0, size - 1, shape=(2, ), dtype=int)),
+            spaces.Sequence(spaces.Box(0, self.size - 1, shape=(2, ), dtype=int)),
             "object_graspable":
             spaces.MultiBinary(1),
         })
         self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
-                                         "pos": spaces.Tuple((spaces.Discrete(4),
-                                                              spaces.Discrete(4)))})
-        self.mode_handler = ModeHandler(grid_size=size)
+                                         "pos": spaces.Tuple((spaces.Discrete(self.size),
+                                                              spaces.Discrete(self.size)))})
+        self.mode_handler = ModeHandler(grid_size=self.size)
         self._action_mode = {
             0: self.mode_handler.Mode.GRASP,
             1: self.mode_handler.Mode.PUSH,
@@ -106,8 +106,10 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def calc_reward(self):  # TODO
-        return 1
+    def calc_reward(self):  # TODO: random numbers for testing purposes
+        if (self._object_location ==  self._target_location).all():
+            return 100
+        return -1
 
     def render(self):
         if self.render_mode == "rgb_array":
