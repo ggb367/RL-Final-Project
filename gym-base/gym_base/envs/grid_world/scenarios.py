@@ -40,8 +40,8 @@ class ScenarioHandler:
 
     def display(self):
         fig, ax = plt.subplots()
-        xaxis = np.arange(0, self.grid_size, 1)
-        yaxis = np.arange(0, self.grid_size, 1)
+        xaxis = np.arange(0, self.grid_size + 1, 1)
+        yaxis = np.arange(0, self.grid_size + 1, 1)
 
         plt.xticks(xaxis)
         plt.yticks(yaxis)
