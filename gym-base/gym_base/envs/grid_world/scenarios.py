@@ -5,6 +5,12 @@ import numpy as np
 
 class ScenarioHandler:
     def __init__(self, scenario) -> None:
+        self.grid_size = None
+        self.robot_arm_location = None
+        self.object_location = None
+        self.object_graspable = None
+        self.target_location = None
+        self.obstacles_location = None
         self.scenario = scenario
         self.setup_scenario()
 
