@@ -12,8 +12,10 @@ from gym_base.envs.grid_world.scenarios import ScenarioHandler
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=4):
-        self.size = size
+    def __init__(self, render_mode=None, size=10):
+        self.scenario = ScenarioHandler(scenario=1)
+
+        self.size = self.scenario.grid_size
         self.window_size = 512
         self.observation_space = spaces.Dict({
             "robot_arm":
@@ -31,8 +33,6 @@ class GridWorldEnv(gym.Env):
                                          "pos": spaces.Tuple((spaces.Discrete(4),
                                                               spaces.Discrete(4)))})
         self.mode_handler = ModeHandler(grid_size=size)
-        self.scenario = ScenarioHandler(scenario=1, grid_size=size)
-
         self._action_mode = {
             0: self.mode_handler.Mode.GRASP,
             1: self.mode_handler.Mode.PUSH,
@@ -82,6 +82,9 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, info
+    
+    def display_scenario(self):
+        self.scenario.display()
 
     def step(self, action):
         mode = self._action_mode[action["mode"]]
