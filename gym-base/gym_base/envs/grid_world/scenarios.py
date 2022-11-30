@@ -33,7 +33,15 @@ class ScenarioHandler:
                                    ]
 
     def setup_scenario_2(self):
-        self.setup_scenario_1()  # TODO
+        self.grid_size = 4
+        self.robot_arm_location = np.array([0, 0])
+        self.object_location = np.array([2, 0])
+        self.object_graspable = np.array([1])
+        self.target_location = np.array([3 , 3])
+        self.obstacles_location = [np.array([3, 2]),
+                                   np.array([1, 2]),
+                                   np.array([3, 3]),
+                                   ]
 
     def setup_scenario_3(self):
         self.setup_scenario_1()  # TODO
