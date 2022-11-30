@@ -4,6 +4,7 @@ from gym import spaces
 import pygame
 import numpy as np
 import random
+import networkx as nx
 
 from gym_base.envs.grid_world.modes import ModeHandler
 from gym_base.envs.grid_world.scenarios import ScenarioHandler
@@ -16,6 +17,11 @@ class GridWorldEnv(gym.Env):
         self.scenario = ScenarioHandler(scenario=1)
 
         self.size = self.scenario.grid_size
+        self._robot_arm_location = None
+        self._object_location = None
+        self._target_location = None
+        self._obstacles_location = None
+        self._prev_object_location = self._object_location.copy()
         self.window_size = 512
         self.observation_space = spaces.Dict({
             "robot_arm":
@@ -90,11 +96,13 @@ class GridWorldEnv(gym.Env):
         mode = self._action_mode[action["mode"]]
         dest = np.array(action["pos"])
 
+        self._prev_object_location = self._object_location.copy()
+
         self._object_location = self.mode_handler.move(
             start=self._object_location,
             mode=mode, dest=dest)
 
-        reward = self.calc_reward()
+        reward = self.calc_reward()  # TODO
         terminated = np.array_equal(
             self._object_location, self._target_location)
 
@@ -106,10 +114,71 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def calc_reward(self):  # TODO: random numbers for testing purposes
-        if (self._object_location ==  self._target_location).all():
-            return 100
-        return -1
+    def object_under_tunnel(self):
+        """
+        Check to see if the object is under the tunnel.
+        """
+        #TODO: add environment with tunnel then check to see if object is under tunnel
+        return False
+
+    def object_off_table(self):
+        """
+        Check to see if the object is off the table.
+        """
+        # return true if object is outside of self.size
+        # TODO: should add a table shape variable to the environment?
+        if self._object_location[0] < 0 or self._object_location[0] >= self.size:
+            return True
+        if self._object_location[1] < 0 or self._object_location[1] >= self.size:
+            return True
+        return False
+
+    def a_star_distance(self, start, goal):
+        """
+        A* search to find the shortest path from start to goal.
+        """
+        # define grid world in networkx graph
+        G = nx.grid_2d_graph(self.size, self.size)
+        # Todo: define graph in __init__ and update graph when object moves?
+        # add edges to graph
+        for i in range(self.size):
+            for j in range(self.size):
+                if (i, j) in self._obstacles_location:
+                    G.remove_node((i, j))
+                if i < self.size - 1:
+                    G.add_edge((i, j), (i + 1, j))
+                if j < self.size - 1:
+                    G.add_edge((i, j), (i, j + 1))
+        # find shortest path
+        path = nx.astar_path(G, start, goal)
+        # return path length
+        return len(path)
+
+    def calc_reward(self):  # TODO
+        """
+        Calculate the reward for the current state.
+        """
+        # base reward on action taken and how close the object is to the goal after the action
+        # 1 unit of distance from goal after action = -1 reward
+        # 2 units of distance from goal after action = -2 reward etc...
+        # -1000 if action gets object stuck under tunnel
+        # -1000 if action gets object to fall off of table
+
+        reward = 0
+
+        # calc distance to goal
+        object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
+        reward -= object_distance_to_goal
+        # calc distance traveled
+        distance_traveled = np.linalg.norm(self._object_location - self._prev_object_location, ord=1)
+        reward += distance_traveled
+        # check to see if object is under tunnel
+        if self.object_under_tunnel():  # TODO
+            reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
+        # check to see if object is off table
+        if self.object_off_table():  # TODO
+            reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
+        return reward
 
     def render(self):
         if self.render_mode == "rgb_array":
