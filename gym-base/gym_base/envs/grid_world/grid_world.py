@@ -12,8 +12,8 @@ from gym_base.envs.grid_world.scenarios import ScenarioHandler
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=10):
-        self.scenario = ScenarioHandler(scenario=2)
+    def __init__(self, render_mode=None):
+        self.scenario = ScenarioHandler(scenario=1)
 
         self.size = self.scenario.grid_size
         self.window_size = 512
