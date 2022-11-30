@@ -106,8 +106,10 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def calc_reward(self):  # TODO
-        return 1
+    def calc_reward(self):  # TODO: random numbers for testing purposes
+        if self._object_location ==  self._target_location:
+            return 100
+        return -1
 
     def render(self):
         if self.render_mode == "rgb_array":
