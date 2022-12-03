@@ -9,6 +9,8 @@ import networkx as nx
 from gym_base.envs.grid_world.modes import ModeHandler
 from gym_base.envs.grid_world.scenarios import ScenarioHandler
 
+import pdb
+
 
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
@@ -21,8 +23,9 @@ class GridWorldEnv(gym.Env):
         self._object_location = None
         self._target_location = None
         self._obstacles_location = None
-        self._prev_object_location = self._object_location.copy()
-        self.window_size = 512
+        self._prev_object_location = None
+        self.num_steps_taken = 0
+        self.window_size = 512*2
         self.observation_space = spaces.Dict({
             "robot_arm":
             spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
@@ -67,14 +70,32 @@ class GridWorldEnv(gym.Env):
                            self._target_location, ord=1)
         }
 
-    def reset(self, seed=None, options=None):
+    def get_valid_random_location(self):
+        """
+        Get a random location that is not an obstacle.
+        """
+        while True:
+            location = np.array([random.randint(0, self.size - 1), random.randint(0, self.size - 1)])
+            is_obs = False
+            for obs in self._obstacles_location:
+                if np.array_equal(location, obs):
+                    is_obs = True
+            if not is_obs:
+                return location
+
+
+    def reset(self, seed=None, random_start = False, options=None):
         super().reset(seed=seed)
 
         self._robot_arm_location = self.scenario.robot_arm_location
-        self._object_location = self.scenario.object_location
+        if not random_start:
+            self._object_location = self.scenario.object_location
+        else:
+            self._object_location = self.get_valid_random_location()
         self._object_graspable = self.scenario.object_graspable
         self._target_location = self.scenario.target_location
         self._obstacles_location = self.scenario.obstacles_location
+        self.num_steps_taken = 0
 
         self.mode_handler.reset(self._robot_arm_location,
                                 self._object_location,
@@ -89,8 +110,8 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
     
-    def display_scenario(self):
-        self.scenario.display()
+    def display_scenario(self, policy=None, Q=None):
+        self.scenario.display(policy=policy, Q=Q)
 
     def step(self, action):
         mode = self._action_mode[action["mode"]]
@@ -101,7 +122,7 @@ class GridWorldEnv(gym.Env):
         self._object_location = self.mode_handler.move(
             start=self._object_location,
             mode=mode, dest=dest)
-
+        self.num_steps_taken += 1
         reward = self.calc_reward()  # TODO
         terminated = np.array_equal(
             self._object_location, self._target_location)
@@ -141,16 +162,24 @@ class GridWorldEnv(gym.Env):
         G = nx.grid_2d_graph(self.size, self.size)
         # Todo: define graph in __init__ and update graph when object moves?
         # add edges to graph
-        for i in range(self.size):
-            for j in range(self.size):
-                if (i, j) in self._obstacles_location:
-                    G.remove_node((i, j))
-                if i < self.size - 1:
-                    G.add_edge((i, j), (i + 1, j))
-                if j < self.size - 1:
-                    G.add_edge((i, j), (i, j + 1))
+        tuple_list = [tuple(item) for item in self._obstacles_location]
+        for row in range(self.size):
+            for col in range(self.size):
+                # pdb.set_trace()
+                # test = [(row, col) == item for item in tuple_list]
+                if any((row, col) == item for item in tuple_list):
+                    G.remove_node((row, col))
+                if row < self.size - 1:
+                    G.add_node((row, col))
+                    G.add_node((row + 1, col))
+                    G.add_edge((row, col), (row + 1, col))
+                if col < self.size - 1:
+                    G.add_node((row, col))
+                    G.add_node((row, col + 1))
+                    G.add_edge((row, col), (row, col + 1))
+
         # find shortest path
-        path = nx.astar_path(G, start, goal)
+        path = nx.astar_path(G, tuple(start), tuple(goal))
         # return path length
         return len(path)
 
@@ -168,16 +197,37 @@ class GridWorldEnv(gym.Env):
 
         # calc distance to goal
         object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
+        #smaller the distance to goal the better
         reward -= object_distance_to_goal
+        # increase negative reward for how many steps taken
+        # reward -= 10*self.num_steps_taken
+        #reward if goal is reached
+        if np.array_equal(self._object_location, self._target_location):
+            reward += 500
+        else:
+            reward -= 500
+
+        # if object doesn't move, "fuck you" penalty
+        if np.array_equal(self._object_location, self._prev_object_location):
+            reward -= 1000
+
+        # calculate direction moved, if object is moved in the wrong direction then give a penalty
+        direction_moved_rel_to_goal = self._object_location - self._prev_object_location
+        direction_to_goal = self._target_location - self._object_location
+        # if the direction moved is not in the direction of the goal then give a penalty
+        # if np.dot(direction_moved_rel_to_goal, direction_to_goal) < 0:
+        #     reward -= 30
+
+
         # calc distance traveled
-        distance_traveled = np.linalg.norm(self._object_location - self._prev_object_location, ord=1)
-        reward += distance_traveled
+        # distance_traveled = np.linalg.norm(self._object_location - self._prev_object_location, ord=1)
+        # reward -= distance_traveled
         # check to see if object is under tunnel
-        if self.object_under_tunnel():  # TODO
-            reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
+        # if self.object_under_tunnel():  # TODO
+        #     reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
         # check to see if object is off table
-        if self.object_off_table():  # TODO
-            reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
+        # if self.object_off_table():  # TODO
+        #     reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
         return reward
 
     def render(self):

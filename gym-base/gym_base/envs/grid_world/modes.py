@@ -1,5 +1,7 @@
+import pdb
+
 import numpy as np
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 import random
 
@@ -15,8 +17,8 @@ class ModeHandler:
     # The start and initial are from the robot arm
     # These ranges vary. The numbers are also arbitraty for the moment
     class Range:
-        GRASP = 4
-        POKE = 3
+        GRASP = 10
+        POKE = 4
         PUSH = 2
 
     class Direction:
@@ -51,37 +53,65 @@ class ModeHandler:
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
             return start
-        neighbours = self.get_neighbour_cells_for_grasp(dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
+        # neighbours = self.get_neighbour_cells_for_grasp(dest)
+        neighbours = []
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=False)
+        # return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
+        if len(candids) == 0:
+            return start
+        return candids[0]
 
     def move_by_poke(self, start, dest):
+        # if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
+        #     dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
+        #         start, dest, self.Range.POKE)
+        # #TODO: Behavior change: if the dest is not in range, then the robot will not move the object
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-                start, dest, self.Range.POKE)
-        neighbours = self.get_neighbours_for_poke_push(start, dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
+            return start
+        # neighbours = self.get_neighbours_for_poke_push(start, dest)
+        neighbours = []
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=True)
+        # return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
+        if len(candids) == 0:
+            return start
+        return candids[0]
 
     def move_by_push(self, start, dest):
+        # if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
+        #     dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
+        #         start, dest, self.Range.PUSH)
+        # # TODO: Behavior change: if the dest is not in range, then the robot will not move the object
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-                start, dest, self.Range.PUSH)
-        neighbours = self.get_neighbours_for_poke_push(start, dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]
+            return start
+        # neighbours = self.get_neighbours_for_poke_push(start, dest)
+        neighbours = []
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=True)
+        # return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]
+        if len(candids) == 0:
+            return start
+        return candids[0]
 
     def pos_in_range_for_poke_push(self, start, dest, range):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         current_to_dest = np.linalg.norm(start - dest)
-        if (start[0] == dest[0] or start[1] == dest[1]) and \
-                robot_to_current <= self.Range.GRASP and current_to_dest <= range:
+        #check if obstacles are in the way
+        if self.is_obstacle(dest):
+            return False
+        # check on line for obstacles
+        if current_to_dest > 1:
+            line = LineString([start, dest])
+            for obs in self.obstacles_location:
+                if line.distance(Point(obs)) < 0.1:
+                    return False
+        if robot_to_current <= self.Range.GRASP and current_to_dest <= range:
             return True
         return False
 
     def pos_is_in_range_for_grasp(self, start, dest):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
+        if self.is_obstacle(dest):
+            return False
         if robot_to_current <= self.Range.GRASP and robot_to_dest <= self.Range.GRASP:
             return True
         return False
@@ -119,10 +149,19 @@ class ModeHandler:
                                 0, self.grid_size - 1).astype(int)
         return furthest_cell
 
-    def get_move_candidates(self, start, dest, neighbours):
+    def get_move_candidates(self, start, dest, neighbours, check_obstacle=False):
         candids = [dest]
         candids.extend(neighbours)
+        # check if the neighbours or dest is an obstacle
         for i in range(len(candids)):
             if self.is_obstacle(candids[i]):
                 candids[i] = start
+        if check_obstacle:
+            # check if the line between start and dest is blocked by an obstacle
+            for i in range(len(candids)):
+                line = LineString([(start[0], start[1]), (candids[i][0], candids[i][1])])
+                for obs in self.obstacles_location:
+                    if line.intersects(Point(obs[0], obs[1])):
+                        candids[i] = start
+
         return candids
