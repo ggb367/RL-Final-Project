@@ -1,4 +1,3 @@
-from argparse import Action
 import gym
 from gym import spaces
 import pygame
@@ -9,21 +8,19 @@ import networkx as nx
 from gym_base.envs.grid_world.modes import ModeHandler
 from gym_base.envs.grid_world.scenarios import ScenarioHandler
 
-import pdb
-
 
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode=None):
         self.scenario = ScenarioHandler(scenario=1)
-
         self.size = self.scenario.grid_size
         self._robot_arm_location = None
         self._object_location = None
         self._target_location = None
         self._obstacles_location = None
         self._prev_object_location = None
+        self._object_graspable = None
         self.num_steps_taken = 0
         self.window_size = 512*2
         self.observation_space = spaces.Dict({
@@ -123,7 +120,7 @@ class GridWorldEnv(gym.Env):
             start=self._object_location,
             mode=mode, dest=dest)
         self.num_steps_taken += 1
-        reward = self.calc_reward()  # TODO
+        reward = self.calc_reward()
         terminated = np.array_equal(
             self._object_location, self._target_location)
 
@@ -160,13 +157,9 @@ class GridWorldEnv(gym.Env):
         """
         # define grid world in networkx graph
         G = nx.grid_2d_graph(self.size, self.size)
-        # Todo: define graph in __init__ and update graph when object moves?
-        # add edges to graph
         tuple_list = [tuple(item) for item in self._obstacles_location]
         for row in range(self.size):
             for col in range(self.size):
-                # pdb.set_trace()
-                # test = [(row, col) == item for item in tuple_list]
                 if any((row, col) == item for item in tuple_list):
                     G.remove_node((row, col))
                 if row < self.size - 1:
@@ -178,7 +171,7 @@ class GridWorldEnv(gym.Env):
                     G.add_node((row, col + 1))
                     G.add_edge((row, col), (row, col + 1))
 
-        # find shortest path
+        # find the shortest path
         path = nx.astar_path(G, tuple(start), tuple(goal))
         # return path length
         return len(path)
@@ -187,41 +180,22 @@ class GridWorldEnv(gym.Env):
         """
         Calculate the reward for the current state.
         """
-        # base reward on action taken and how close the object is to the goal after the action
-        # 1 unit of distance from goal after action = -1 reward
-        # 2 units of distance from goal after action = -2 reward etc...
-        # -1000 if action gets object stuck under tunnel
-        # -1000 if action gets object to fall off of table
 
         reward = 0
 
         # calc distance to goal
         object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
-        #smaller the distance to goal the better
         reward -= object_distance_to_goal
-        # increase negative reward for how many steps taken
-        # reward -= 10*self.num_steps_taken
-        #reward if goal is reached
+
+        # reach goal or not
         if np.array_equal(self._object_location, self._target_location):
             reward += 500
         else:
             reward -= 500
 
-        # if object doesn't move, "fuck you" penalty
+        # if object doesn't move, penalty
         if np.array_equal(self._object_location, self._prev_object_location):
             reward -= 1000
-
-        # calculate direction moved, if object is moved in the wrong direction then give a penalty
-        direction_moved_rel_to_goal = self._object_location - self._prev_object_location
-        direction_to_goal = self._target_location - self._object_location
-        # if the direction moved is not in the direction of the goal then give a penalty
-        # if np.dot(direction_moved_rel_to_goal, direction_to_goal) < 0:
-        #     reward -= 30
-
-
-        # calc distance traveled
-        # distance_traveled = np.linalg.norm(self._object_location - self._prev_object_location, ord=1)
-        # reward -= distance_traveled
         # check to see if object is under tunnel
         # if self.object_under_tunnel():  # TODO
         #     reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it

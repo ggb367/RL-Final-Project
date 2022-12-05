@@ -13,6 +13,7 @@ class ModeHandler:
         POKE = 2
 
     # TODO: These are the maximum range an action can happen.
+    # TODO: make these dependent on the scenario
     # Depending where the robot arm is placed and how far
     # The start and initial are from the robot arm
     # These ranges vary. The numbers are also arbitraty for the moment
@@ -53,19 +54,13 @@ class ModeHandler:
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
             return start
-        # neighbours = self.get_neighbour_cells_for_grasp(dest)
         neighbours = []
         candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=False)
-        # return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
         if len(candids) == 0:
             return start
         return candids[0]
 
     def move_by_poke(self, start, dest):
-        # if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
-        #     dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-        #         start, dest, self.Range.POKE)
-        # #TODO: Behavior change: if the dest is not in range, then the robot will not move the object
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
             return start
         # neighbours = self.get_neighbours_for_poke_push(start, dest)
@@ -77,10 +72,6 @@ class ModeHandler:
         return candids[0]
 
     def move_by_push(self, start, dest):
-        # if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
-        #     dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-        #         start, dest, self.Range.PUSH)
-        # # TODO: Behavior change: if the dest is not in range, then the robot will not move the object
         if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
             return start
         # neighbours = self.get_neighbours_for_poke_push(start, dest)

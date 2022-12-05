@@ -1,11 +1,10 @@
-# from random import betavariate
 import numpy as np
 from tqdm import tqdm
 
 
 def q_learning(env):
     learning_rate = 0.4
-    epsilon = 0.4
+    epsilon = 0.4  # randomness factor
     discount_factor = 0.95
 
     num_of_episodes = 6000
@@ -44,14 +43,10 @@ def q_learning(env):
             if terminated:
                 episode_avg_reward[ep] = avg_reward / (it + 1)
                 episode_num_its[ep] = it
-                # print("Reached goal on iteration: %d" % it)
                 break
             if it == number_of_iterations - 1:
                 episode_avg_reward[ep] = avg_reward / (it + 1)
                 episode_num_its[ep] = it
-                # print("Failed to reach goal")
-        # print("Q for episode %d: " % ep)
-        # print(Q)
     return Q, episode_avg_reward, episode_num_its
 
 
@@ -63,7 +58,6 @@ def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
         best_actions = np.argwhere(Q[current_state[0], current_state[1], :] == np.max(
             Q[current_state[0], current_state[1], :])).flatten()
         action = np.random.choice(best_actions)
-        # action = np.argmax(Q[current_state[0], current_state[1], :])
 
     return action
 

@@ -66,7 +66,7 @@ class ScenarioHandler:
             return False
         return True
 
-    def display(self, policy=None, Q=None):
+    def display(self, policy=None, Q=None, save=False):
         fig, ax = plt.subplots()
         xaxis = np.arange(0, self.grid_size + 1, 1)
         yaxis = np.arange(0, self.grid_size + 1, 1)
@@ -97,7 +97,8 @@ class ScenarioHandler:
                     ax.text(col + 0.5, row + 0.7, Q[col, row, -1], va='center', ha='center')
         plt.grid(True)
         ax.legend()
-        # plt.savefig(f'scenarios/{self.scenario}.png')
+        if save:
+            plt.savefig(f'scenarios/{self.scenario}.png')
         plt.show()
 
 
