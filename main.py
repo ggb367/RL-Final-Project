@@ -11,26 +11,26 @@ print("Starting Q-learning")
 Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
 print("Finding Policy")
 p = policy(Q, grid_env.size)
-for row in range(0, grid_env.size):
-    for col in range(0, grid_env.size):
-        print("row: %d, col: %d" % (row, col))
-        print(Q[col, row])
-    print()
+# for row in range(0, grid_env.size):
+#     for col in range(0, grid_env.size):
+#         print("row: %d, col: %d" % (row, col))
+#         print(Q[col, row])
+#     print()
 
-# plot the average reward per episode
-plt.figure()
-plt.plot(episode_avg_reward)
-plt.xlabel('Episode')
-plt.ylabel('Average Reward')
-plt.title('Average Reward per Episode')
-# plot the number of iterations per episode
-plt.figure()
-plt.plot(episode_num_its)
-plt.xlabel('Episode')
-plt.ylabel('Number of Iterations')
-print("Displaying Policy")
+# # plot the average reward per episode
+# plt.figure()
+# plt.plot(episode_avg_reward)
+# plt.xlabel('Episode')
+# plt.ylabel('Average Reward')
+# plt.title('Average Reward per Episode')
+# # plot the number of iterations per episode
+# plt.figure()
+# plt.plot(episode_num_its)
+# plt.xlabel('Episode')
+# plt.ylabel('Number of Iterations')
+# print("Displaying Policy")
 # display the policy, passing Q and p print them on the graph
-grid_env.display_scenario(Q=Q, policy=p)
+grid_env.animate_scenario(p)
 
 # extra code:
 # to create an action and test it:
