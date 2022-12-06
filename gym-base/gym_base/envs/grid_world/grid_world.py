@@ -13,7 +13,8 @@ class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode=None):
-        self.scenario = ScenarioHandler(scenario=1)
+        self.scenario_num = 1
+        self.scenario = ScenarioHandler(scenario=self.scenario_num)
         self.size = self.scenario.grid_size
         self._robot_arm_location = None
         self._object_location = None
@@ -38,7 +39,7 @@ class GridWorldEnv(gym.Env):
         self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
                                          "pos": spaces.Tuple((spaces.Discrete(self.size),
                                                               spaces.Discrete(self.size)))})
-        self.mode_handler = ModeHandler(grid_size=self.size)
+        self.mode_handler = ModeHandler(grid_size=self.size, scenario_num=self.scenario_num)
         self._action_mode = {
             0: self.mode_handler.Mode.GRASP,
             1: self.mode_handler.Mode.PUSH,
@@ -109,6 +110,9 @@ class GridWorldEnv(gym.Env):
     
     def display_scenario(self, policy=None, Q=None):
         self.scenario.display(policy=policy, Q=Q)
+
+    def animate_scenario(self, policy):
+        self.scenario.animate(policy=policy)
 
     def step(self, action):
         mode = self._action_mode[action["mode"]]
