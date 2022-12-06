@@ -1,5 +1,7 @@
+import pdb
+
 import numpy as np
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 import random
 
@@ -15,9 +17,27 @@ class ModeHandler:
     # The start and initial are from the robot arm
     # These ranges vary. The numbers are also arbitraty for the moment
     class Range:
-        GRASP = 4
-        POKE = 3
-        PUSH = 2
+        def __init__(self, scenario_num):
+            self.scenario_num = scenario_num
+            self.GRASP = None
+            self.POKE_DROPOFF = None
+            self.PUSH = None
+            self.PUSH_DROPOFF = None
+            self.POKE = None
+            self.instantiate_range()
+        def instantiate_range(self):
+            if self.scenario_num == 1:
+                self.GRASP = 10
+                self.POKE = 4
+                self.POKE_DROPOFF = np.sqrt(9)
+                self.PUSH = 2
+                self.PUSH_DROPOFF = np.sqrt(12)
+            elif self.scenario_num == 2:
+                self.GRASP = 3
+                self.POKE = 2
+                self.POKE_DROPOFF = np.sqrt(4)
+                self.PUSH = 1
+                self.PUSH_DROPOFF = np.sqrt(2)
 
     class Direction:
         UP = np.array([0, 1])
@@ -25,8 +45,18 @@ class ModeHandler:
         RIGHT = np.array([1, 0])
         LEFT = np.array([-1, 0])
 
-    def __init__(self, grid_size) -> None:
+    class Reward:
+        OFF_TABLE = -1000
+        UNDER_TUNNEL = -1000
+
+    def __init__(self, grid_size, scenario_num) -> None:
+        self.scenario_num = scenario_num
         self.grid_size = grid_size
+        self.robot_arm_location = None
+        self.object_location = None
+        self.target_location = None
+        self.obstacles_location = None
+        self.range = self.Range(self.scenario_num)
 
     def reset(self, robot_arm_location, object_location, target_location, obstacles_location):
         self.robot_arm_location = robot_arm_location
@@ -47,42 +77,71 @@ class ModeHandler:
     def move_by_grasp(self, start, dest):
         if not self.pos_is_in_range_for_grasp(start, dest):
             return start
-        neighbours = self.get_neighbour_cells_for_grasp(dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.96, 0.01, 0.01, 0.01, 0.01), k=1)[0]
+        neighbours = []
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=False)
+        if len(candids) == 0:
+            return start
+        return candids[0]
 
     def move_by_poke(self, start, dest):
-        if not self.pos_in_range_for_poke_push(start, dest, self.Range.POKE):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-                start, dest, self.Range.POKE)
-            if start[0] != dest[0] and start[1] != dest[1]:
-                print("ERROR: poke action not valid")
+        if not self.pos_in_range_for_poke_push(start, dest, self.range.POKE):
+            return start
         neighbours = self.get_neighbours_for_poke_push(start, dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.88, 0.6, 0.6), k=1)[0]
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=True)
+        num_candids = len(candids)
+        if num_candids == 0:
+            return start
+        # make probablity range dependent on distance to goal
+        dist_to_goal = np.linalg.norm(dest - start)
+        # 1 till dist_to_goal=np.sqrt(9), then drops off exponentially
+        if dist_to_goal < self.range.POKE_DROPOFF:  # TODO: make this dependent on the scenario
+            reach_goal_prob = 1.0
+        else:
+            reach_goal_prob = 1.0 / (1 + np.exp(-(dist_to_goal-np.sqrt(9))))
+        extra_prob = (1-reach_goal_prob) / (num_candids - 1)
+        probs = [reach_goal_prob] + [extra_prob] * (num_candids - 1)
+        return random.choices(candids, probs, k=1)[0]
 
     def move_by_push(self, start, dest):
-        if not self.pos_in_range_for_poke_push(start, dest, self.Range.PUSH):
-            dest = self.find_furthest_reachable_cell_in_the_same_direction_for_poke_push(
-                start, dest, self.Range.PUSH)
-            if start[0] != dest[0] and start[1] != dest[1]:
-                print("ERROR: push action not valid")
+        if not self.pos_in_range_for_poke_push(start, dest, self.range.PUSH):
+            return start
         neighbours = self.get_neighbours_for_poke_push(start, dest)
-        candids = self.get_move_candidates(start, dest, neighbours)
-        return random.choices(candids, (0.92, 0.4, 0.4), k=1)[0]
+        candids = self.get_move_candidates(start, dest, neighbours, check_obstacle=True)
+        num_candids = len(candids)
+        if num_candids == 0:
+            return start
+        # make probablity range dependent on distance to goal
+        dist_to_goal = np.linalg.norm(dest - start)
+        if dist_to_goal < self.range.PUSH_DROPOFF: # TODO: make this dependent on the scenario
+            reach_goal_prob = 1.0
+        else:
+            reach_goal_prob = 1.0 / (1 + np.exp(-(dist_to_goal - np.sqrt(9))))
+        extra_prob = (1 - reach_goal_prob) / (num_candids - 1)
+        probs = [reach_goal_prob] + [extra_prob] * (num_candids - 1)
+        return random.choices(candids, probs, k=1)[0]
 
     def pos_in_range_for_poke_push(self, start, dest, range):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         current_to_dest = np.linalg.norm(start - dest)
-        if (start[0] == dest[0] or start[1] == dest[1]) and \
-                robot_to_current <= self.Range.GRASP and current_to_dest <= range:
+        #check if obstacles are in the way
+        if self.is_obstacle(dest):
+            return False
+        # check on line for obstacles
+        if current_to_dest > 1:
+            line = LineString([start, dest])
+            for obs in self.obstacles_location:
+                if line.distance(Point(obs)) < 0.1:
+                    return False
+        if robot_to_current <= self.range.GRASP and current_to_dest <= range:
             return True
         return False
 
     def pos_is_in_range_for_grasp(self, start, dest):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         robot_to_dest = np.linalg.norm(dest - self.robot_arm_location)
-        if robot_to_current <= self.Range.GRASP and robot_to_dest <= self.Range.GRASP:
+        if self.is_obstacle(dest):
+            return False
+        if robot_to_current <= self.range.GRASP and robot_to_dest <= self.range.GRASP:
             return True
         return False
 
@@ -95,9 +154,14 @@ class ModeHandler:
         return neighbours
 
     def get_neighbours_for_poke_push(self, start, dest):
-        directions = [self.Direction.LEFT, self.Direction.RIGHT]
+        # if moving diagonally, neighbors in all directions
+        directions = [self.Direction.LEFT, self.Direction.RIGHT, self.Direction.UP, self.Direction.DOWN]
+        # if moving up or down only, then the neigbours are up and down
         if start[0] == dest[0]:
             directions = [self.Direction.UP, self.Direction.DOWN]
+        # if moving left or right only, then the neigbours are left and right
+        elif start[1] == dest[1]:
+            directions = [self.Direction.LEFT, self.Direction.RIGHT]
 
         neighbours = []
         for dir in directions:
@@ -119,10 +183,19 @@ class ModeHandler:
                                 0, self.grid_size - 1).astype(int)
         return furthest_cell
 
-    def get_move_candidates(self, start, dest, neighbours):
+    def get_move_candidates(self, start, dest, neighbours, check_obstacle=False):
         candids = [dest]
         candids.extend(neighbours)
+        # check if the neighbours or dest is an obstacle
         for i in range(len(candids)):
             if self.is_obstacle(candids[i]):
                 candids[i] = start
+        if check_obstacle:
+            # check if the line between start and dest is blocked by an obstacle
+            for i in range(len(candids)):
+                line = LineString([(start[0], start[1]), (candids[i][0], candids[i][1])])
+                for obs in self.obstacles_location:
+                    if line.intersects(Point(obs[0], obs[1])):
+                        candids[i] = start
+
         return candids
