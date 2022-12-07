@@ -14,7 +14,7 @@ class GridWorldEnv(gym.Env):
 
     def __init__(self, render_mode=None):
         self.scenario_num = 1
-        self.scenario = ScenarioHandler(scenario=self.scenario_num)
+        self.scenario = ScenarioHandler(scenario=self.scenario_num)  # TODO: convert to pybullet scenario handler
         self.size = self.scenario.grid_size
         self._robot_arm_location = None
         self._object_location = None
@@ -22,7 +22,6 @@ class GridWorldEnv(gym.Env):
         self._obstacles_location = None
         self._prev_object_location = None
         self._object_graspable = None
-        self.num_steps_taken = 0
         self.window_size = 512*2
         self.observation_space = spaces.Dict({
             "robot_arm":
@@ -81,7 +80,6 @@ class GridWorldEnv(gym.Env):
             if not is_obs:
                 return location
 
-
     def reset(self, seed=None, random_start = False, options=None):
         super().reset(seed=seed)
 
@@ -93,7 +91,6 @@ class GridWorldEnv(gym.Env):
         self._object_graspable = self.scenario.object_graspable
         self._target_location = self.scenario.target_location
         self._obstacles_location = self.scenario.obstacles_location
-        self.num_steps_taken = 0
 
         self.mode_handler.reset(self._robot_arm_location,
                                 self._object_location,
@@ -120,10 +117,7 @@ class GridWorldEnv(gym.Env):
 
         self._prev_object_location = self._object_location.copy()
 
-        self._object_location = self.mode_handler.move(
-            start=self._object_location,
-            mode=mode, dest=dest)
-        self.num_steps_taken += 1
+        self._object_location = None # TODO update this to call pybullet
         reward = self.calc_reward()
         terminated = np.array_equal(
             self._object_location, self._target_location)
@@ -135,25 +129,6 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, reward, terminated, False, info
-
-    def object_under_tunnel(self):
-        """
-        Check to see if the object is under the tunnel.
-        """
-        #TODO: add environment with tunnel then check to see if object is under tunnel
-        return False
-
-    def object_off_table(self):
-        """
-        Check to see if the object is off the table.
-        """
-        # return true if object is outside of self.size
-        # TODO: should add a table shape variable to the environment?
-        if self._object_location[0] < 0 or self._object_location[0] >= self.size:
-            return True
-        if self._object_location[1] < 0 or self._object_location[1] >= self.size:
-            return True
-        return False
 
     def a_star_distance(self, start, goal):
         """
@@ -180,7 +155,7 @@ class GridWorldEnv(gym.Env):
         # return path length
         return len(path)
 
-    def calc_reward(self):  # TODO
+    def calc_reward(self):
         """
         Calculate the reward for the current state.
         """
@@ -200,12 +175,6 @@ class GridWorldEnv(gym.Env):
         # if object doesn't move, penalty
         if np.array_equal(self._object_location, self._prev_object_location):
             reward -= 1000
-        # check to see if object is under tunnel
-        # if self.object_under_tunnel():  # TODO
-        #     reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
-        # check to see if object is off table
-        # if self.object_off_table():  # TODO
-        #     reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
         return reward
 
     def render(self):
