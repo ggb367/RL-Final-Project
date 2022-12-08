@@ -1,6 +1,9 @@
 import numpy as np
-from tqdm import tqdm
 
+from multimodal_planning_v2 import PathPlanner
+
+
+from tqdm import tqdm
 
 def q_learning(env):
     learning_rate = 0.4

@@ -4,17 +4,42 @@ import pygame
 import numpy as np
 import random
 import networkx as nx
+import pdb
+
+import matplotlib.pyplot as plt
+
+from shapely.geometry import Polygon, LineString
+# import shapely affine
+from shapely import affinity
+
+from npm_base import Point, Quaternion, Pose, convert_orientation
+from robot_sim_envs import MultimodalEnv
+from multimodal_planning_v2 import PathPlanner
 
 from gym_base.envs.grid_world.modes import ModeHandler
 from gym_base.envs.grid_world.scenarios import ScenarioHandler
+
+from gym_base.envs.grid_world.sim import get_contour_point, get_pose, get_ee_vel
 
 
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
+    def setup_scenario(self):
+        scenario_id = 1
+        sim = True
+        enable_realtime = True
+        enable_gui = True
+        self.sim_scenario = MultimodalEnv(scenario_id=scenario_id, sim=sim,
+                                          enable_realtime=enable_realtime, enable_gui=enable_gui)
+
     def __init__(self, render_mode=None):
+        self.setup_scenario()
+
         self.scenario_num = 1
-        self.scenario = ScenarioHandler(scenario=self.scenario_num)  # TODO: convert to pybullet scenario handler
+        # TODO: convert to pybullet scenario handler
+        self.scenario = ScenarioHandler(scenario=self.scenario_num)
+
         self.size = self.scenario.grid_size
         self._robot_arm_location = None
         self._object_location = None
@@ -31,14 +56,34 @@ class GridWorldEnv(gym.Env):
             "target":
             spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
             "obstacles":
-            spaces.Sequence(spaces.Box(0, self.size - 1, shape=(2, ), dtype=int)),
+            spaces.Sequence(spaces.Box(
+                0, self.size - 1, shape=(2, ), dtype=int)),
+            "object_graspable":
+            spaces.MultiBinary(1),
+        })
+
+        # sim_size = 0
+        ikea_size = np.array(self.sim_scenario.table_ikea.get_size())[0]
+        # sim_size =
+
+        self.observation_space_sim = spaces.Dict({
+            "robot_arm":
+            spaces.Box(-ikea_size, ikea_size, shape=(2, ), dtype=int),
+            "object":
+            spaces.Box(-ikea_size, ikea_size, shape=(2, ), dtype=int),
+            "target":
+            spaces.Box(-ikea_size, ikea_size, shape=(2, ), dtype=int),
+            "obstacles":
+            spaces.Sequence(
+                spaces.Box(-ikea_size, ikea_size, shape=(2, ), dtype=int)),
             "object_graspable":
             spaces.MultiBinary(1),
         })
         self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
                                          "pos": spaces.Tuple((spaces.Discrete(self.size),
                                                               spaces.Discrete(self.size)))})
-        self.mode_handler = ModeHandler(grid_size=self.size, scenario_num=self.scenario_num)
+        self.mode_handler = ModeHandler(
+            grid_size=self.size, scenario_num=self.scenario_num)
         self._action_mode = {
             0: self.mode_handler.Mode.GRASP,
             1: self.mode_handler.Mode.PUSH,
@@ -72,7 +117,8 @@ class GridWorldEnv(gym.Env):
         Get a random location that is not an obstacle.
         """
         while True:
-            location = np.array([random.randint(0, self.size - 1), random.randint(0, self.size - 1)])
+            location = np.array(
+                [random.randint(0, self.size - 1), random.randint(0, self.size - 1)])
             is_obs = False
             for obs in self._obstacles_location:
                 if np.array_equal(location, obs):
@@ -80,14 +126,24 @@ class GridWorldEnv(gym.Env):
             if not is_obs:
                 return location
 
-    def reset(self, seed=None, random_start = False, options=None):
+    def reset_sim(self):
+        self._robot_arm_pb_sim = self.sim_scenario.robot
+        self._object_pb_sim = self.sim_scenario.target_object
+        self._object_graspable_sim = True  # Add a graspable flag to the sim scenario
+        self._target_pb_sim = self.sim_scenario.goal_node
+        self._obstacles_pb_sim = self.sim_scenario.all_obstacles
+
+    def reset(self, seed=None, random_start=False, options=None):
         super().reset(seed=seed)
+        self.reset_sim()
 
         self._robot_arm_location = self.scenario.robot_arm_location
+
         if not random_start:
             self._object_location = self.scenario.object_location
         else:
             self._object_location = self.get_valid_random_location()
+
         self._object_graspable = self.scenario.object_graspable
         self._target_location = self.scenario.target_location
         self._obstacles_location = self.scenario.obstacles_location
@@ -104,20 +160,92 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, info
-    
+
     def display_scenario(self, policy=None, Q=None):
         self.scenario.display(policy=policy, Q=Q)
 
     def animate_scenario(self, policy):
         self.scenario.animate(policy=policy)
 
+    def apply_poke_in_sim(self, dest):
+        dest = [0.7, 0.2]
+        end_ee_pose = get_pose(self.sim_scenario.target_object, dest)
+        end_ee_pose.orientation = self.sim_scenario.robot.get_ee_pose().orientation
+
+        countour_point = get_contour_point(
+            end_ee_pose, self.sim_scenario.target_object)
+
+        start_ee_pose = get_pose(self.sim_scenario.target_object, np.array(
+            [countour_point.x, countour_point.y]))
+        start_ee_pose.orientation = self.sim_scenario.robot.get_ee_pose().orientation
+        start_ee_pose.position.z += 0.03
+
+        end_ee_pose.position.z += 0.03
+
+        # plt.plot([end_ee_pose.position.x], [end_ee_pose.position.y], color='blue')
+        # plt.plot([start_ee_pose.position.x], [start_ee_pose.position.y], color='red')
+        # plt.plot([countour_point.x], [countour_point.y], color='green')
+        # plt.show()
+        # start_ee_pose = self.sim_scenario.robot.get_ee_pose()
+        # start_ee_pose.position.x = countour_point.x
+        # start_ee_pose.position.y = countour_point.y
+        # start_ee_pose.position.z = end_ee_pose.position.z
+
+        init_joint_angles = self.sim_scenario.robot.get_ik_solution(
+            start_ee_pose)
+        final_joint_angles = self.sim_scenario.robot.get_ik_solution(
+            end_ee_pose)
+
+        init_joint_angles = [1.21146268,  1.01414402, -0.32507411, -2.25405194,  1.85247139,  2.81033492,
+                             -0.07932621]
+        final_joint_angles = [0.24571083,  1.46706513,  0.05270085, -0.93101708, -0.0385409,   2.3629429,
+                              1.03453555]
+
+        # pdb.set_trace()
+        print("init: ", init_joint_angles)
+        print("final:", final_joint_angles)
+
+        # init_joint_angles = [-0.01436703, 1.72847498,  0.6815732, -
+        #                      0.68954973, -0.85966426, 2.19816014, 1.24536637]
+
+        # final_joint_angles = [0.01436703, 1.72847498,  0.6815732, -
+        #                       0.68954973, -0.85966426, 2.19816014, 1.24536637]
+
+        self.sim_scenario.robot.move_to_joint_angles(init_joint_angles, using_planner=False)
+        # self.sim_scenario.robot.move_to_default_pose(using_planner=False)
+        # self.sim_scenario.robot.move_to_joint_angles(final_joint_angles, using_planner=False)
+
+        ee_vel_vec = get_ee_vel(self._object_pb_sim.get_sim_pose(
+            euler=False), end_ee_pose, 1)
+
+        # object_id = self._object_pb_sim.id
+        # obstacle_ids = [obs.id for obs in self._obstacles_pb_sim]
+        # ee_position_threshold = 1e-2
+        # time_limit = 1
+
+        target_ee_velocity = ee_vel_vec
+        time_duration = 3
+        object_id = self.sim_scenario.target_object.id
+        # (ee_vel, duration, mode, object_id)
+        self.sim_scenario.robot.execute_constant_ee_velocity(target_ee_velocity, time_duration, 'poke', object_id)
+
+    # def apply_ee_velocity(self, end_ee_pose, target_ee_velocity, time_duration, ee_position_threshold=1e-2,
+    #                       time_limit=1, skill_name='poke', collect_data=False, linear=False, **kwargs):
+
+        # get_move_trajectort()
+        # self.sim_scenario.robot.apply_impulse(end_ee_pose,
+        #                                       ee_vel_vec)
+        # self.sim_scenario.target_object.move_pose()
+
     def step(self, action):
         mode = self._action_mode[action["mode"]]
         dest = np.array(action["pos"])
+        if mode == self.mode_handler.Mode.PUSH:
+            self.apply_poke_in_sim(dest)
 
         self._prev_object_location = self._object_location.copy()
-
-        self._object_location = None # TODO update this to call pybullet
+        self._object_location = self.mode_handler.move(
+            self._object_location, mode, dest)
         reward = self.calc_reward()
         terminated = np.array_equal(
             self._object_location, self._target_location)
@@ -163,7 +291,8 @@ class GridWorldEnv(gym.Env):
         reward = 0
 
         # calc distance to goal
-        object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
+        object_distance_to_goal = self.a_star_distance(
+            self._object_location, self._target_location)
         reward -= object_distance_to_goal
 
         # reach goal or not

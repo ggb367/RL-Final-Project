@@ -7,10 +7,14 @@ import matplotlib.pyplot as plt
 grid_env = gym.make('gym_base/GridWorld-v0')
 grid_env.reset()  # reset environment to a new, random state
 
+action = {'mode': 1, 'pos': (3, 1)}
+grid_env.step(action)
+
+
 print("Starting Q-learning")
-Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
+# Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
 print("Finding Policy")
-p = policy(Q, grid_env.size)
+# p = policy(Q, grid_env.size)
 # for row in range(0, grid_env.size):
 #     for col in range(0, grid_env.size):
 #         print("row: %d, col: %d" % (row, col))
@@ -30,7 +34,7 @@ p = policy(Q, grid_env.size)
 # plt.ylabel('Number of Iterations')
 # print("Displaying Policy")
 # display the policy, passing Q and p print them on the graph
-grid_env.animate_scenario(p)
+# grid_env.animate_scenario(p)
 
 # extra code:
 # to create an action and test it:
