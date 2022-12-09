@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Rectangle
 import numpy as np
+import pybullet as pb
 
 
 class ScenarioHandler:
@@ -30,7 +31,7 @@ class ScenarioHandler:
         self.object_location = np.array([2, 0])
         self.initial_object_location = np.array([2, 0])
         self.object_graspable = np.array([1])
-        self.target_location = np.array([8 , 8])
+        self.target_location = np.array([8, 8])
         self.obstacles_location = [np.array([3, 2]),
                                    np.array([4, 2]),
                                    np.array([3, 3]),
@@ -48,21 +49,19 @@ class ScenarioHandler:
         self.object_location = np.array([2, 0])
         self.initial_object_location = np.array([2, 0])
         self.object_graspable = np.array([1])
-        self.target_location = np.array([3 , 3])
+        self.target_location = np.array([3, 3])
         self.obstacles_location = [self.robot_arm_location,
                                    np.array([3, 2]),
                                    np.array([0, 2]),
                                    ]
-
 
     def setup_scenario_3(self):
         self.grid_size = 2
         self.robot_arm_location = np.array([0, 0])
         self.object_location = np.array([1, 0])
         self.object_graspable = np.array([1])
-        self.target_location = np.array([1 , 1])
+        self.target_location = np.array([1, 1])
         self.obstacles_location = [self.robot_arm_location]
-
 
     def is_reachable(self, position):
         # TODO: make this dependent on the scenario
@@ -86,7 +85,6 @@ class ScenarioHandler:
             for col in range(0, self.grid_size):
                 if self.is_reachable(np.array([row, col])):
                     ax.add_patch(Rectangle((col, row), 1, 1, color='blue', alpha=0.2))
-
 
         ax.add_patch(Rectangle(self.object_location, 1, 1, color='pink', label='object'))
         ax.add_patch(Rectangle(self.target_location, 1, 1, color='green', label='target loc'))
@@ -146,13 +144,14 @@ class ScenarioHandler:
             # add the new object
             ax.add_patch(object_patch)
             # update title with action type and goal location
-            ax.set_title(f'Action: {self.define_action(self.object_location, policy)} to Location: {self.get_next_state(self.object_location, policy)}')
+            ax.set_title(
+                f'Action: {self.define_action(self.object_location, policy)} to Location: {self.get_next_state(self.object_location, policy)}')
             # if at goal change title
             if np.array_equal(self.object_location, self.target_location):
                 ax.set_title(f'Object at Goal Location: {self.target_location}')
             return ax.patches
-        return animate
 
+        return animate
 
     def animate(self, policy):
         fig, ax = plt.subplots()
@@ -179,8 +178,3 @@ class ScenarioHandler:
         # plt.show(block=False)
         # save the animation as a gif
         ani.save(f'scenarios/{self.scenario}.gif', writer='imagemagick', fps=1)
-
-
-
-
-

@@ -23,7 +23,7 @@ def get_contour_point(end_ee_pose, pb_target_object):
     intersection_before_buffer = object_polygon.boundary.intersection(
         init_to_end)
 
-    init_to_end_scaled = affinity.scale(init_to_end, 10000, 10000)  # if you see this, no you don't
+    init_to_end_scaled = affinity.scale(init_to_end, 1000, 1000)  # if you see this, no you don't
     intersection_after_buffer = object_polygon.boundary.intersection(
         init_to_end_scaled)
     contour_points = [point for point in intersection_after_buffer]

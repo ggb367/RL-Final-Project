@@ -5,6 +5,9 @@ from shapely.geometry import LineString, Point
 
 import random
 
+from gym_base.envs.grid_world.sim import get_contour_point, get_pose, get_ee_vel
+import pybullet as pb
+
 
 class ModeHandler:
     class Mode:
@@ -199,3 +202,159 @@ class ModeHandler:
                         candids[i] = start
 
         return candids
+
+class SimModeHandler:
+    class Mode:
+        GRASP = 0
+        PUSH = 1
+        POKE = 2
+
+    def __init__(self, discritize, realtime):
+        self.discritize = discritize
+        self.realtime = realtime
+
+    def pos_is_in_range_for_grasp(self, dest):
+        distance = np.linalg.norm(dest)
+        if distance <= 0.67:  # rough estimate of the range of the robot arm
+            return True
+        return False
+
+    def move(self, mode, dest, target_object, robot):
+        if mode == self.Mode.GRASP:
+            return self.move_by_grasp(dest, target_object, robot)
+
+        elif mode == self.Mode.POKE:
+            return self.move_by_poke(dest, target_object, robot)
+
+        if mode == self.Mode.PUSH:
+            return self.move_by_push(dest, target_object, robot)
+
+    def move_by_grasp(self, dest, target_object, robot):
+        # move by grasp in pybullet
+        # this is some trash ass code that relocates the object to the destination if it is in range
+        if self.pos_is_in_range_for_grasp(dest):
+            target_pose = target_object.pose
+            target_pose.position.x = dest[0]
+            target_pose.position.y = dest[1]
+            target_object.relocate(target_pose)
+            return dest
+        else:
+            return target_object.get_position()[:2]
+
+    def move_by_poke(self, dest, target_object, robot):
+        end_ee_pose = get_pose(target_object, dest)
+        end_ee_pose.orientation = robot.get_ee_pose().orientation
+
+        countour_point = get_contour_point(
+            end_ee_pose, target_object)
+
+        start_ee_pose = get_pose(target_object, np.array(
+            [countour_point.x, countour_point.y]))
+        start_ee_pose.orientation = robot.get_ee_pose().orientation
+        start_ee_pose.position.z += 0.03
+
+        end_ee_pose.position.z += 0.03
+
+        init_joint_angles = None
+        count_init = 0
+        while init_joint_angles is None and count_init < 100:
+            init_joint_angles = robot.get_ik_solution(start_ee_pose)
+            count_init += 1
+        final_joint_angles = None
+        count_final = 0
+        while final_joint_angles is None and count_final < 100:
+            final_joint_angles = robot.get_ik_solution(end_ee_pose)
+            count_final += 1
+        # raise error if no solution found
+        if init_joint_angles is None or final_joint_angles is None:
+            return target_object.get_position()[:2]
+        # init_joint_angles = robot.get_ik_solution(
+        #     start_ee_pose)
+        # final_joint_angles = robot.get_ik_solution(
+        #     end_ee_pose)
+
+        # init_joint_angles = [1.21146268,  1.01414402, -0.32507411, -2.25405194,  1.85247139,  2.81033492,
+        #                      -0.07932621]
+        # final_joint_angles = [0.24571083,  1.46706513,  0.05270085, -0.93101708, -0.0385409,   2.3629429,
+        #                       1.03453555]
+
+        robot.move_to_joint_angles(init_joint_angles, using_planner=False)
+
+        ee_vel_vec = get_ee_vel(target_object.get_sim_pose(
+            euler=False), end_ee_pose, 1.2)
+
+        target_ee_velocity = ee_vel_vec
+        time_duration = 3
+        object_id = target_object.id
+        robot.execute_constant_ee_velocity(target_ee_velocity, time_duration, 'poke', object_id)
+        # get target_object_position
+        while target_object.is_moving():
+            if not self.realtime:
+                pb.stepSimulation()
+            pass
+        new_position = np.array(target_object.get_sim_pose(euler=False).position.tolist())[:2]
+        # lock new_position to the grid defined by self.discritize
+        new_position = np.around(new_position / self.discritize) * self.discritize
+        return new_position
+
+    def move_by_push(self, dest, target_object, robot):
+        end_ee_pose = get_pose(target_object, dest)
+        end_ee_pose.orientation = robot.get_ee_pose().orientation
+
+        countour_point = get_contour_point(
+            end_ee_pose, target_object)
+
+        start_ee_pose = get_pose(target_object, np.array(
+            [countour_point.x, countour_point.y]))
+        start_ee_pose.orientation = robot.get_ee_pose().orientation
+        start_ee_pose.position.z += 0.03
+
+        end_ee_pose.position.z += 0.03
+
+        init_joint_angles = None
+        count_init = 0
+        while init_joint_angles is None and count_init < 100:
+            init_joint_angles = robot.get_ik_solution(start_ee_pose)
+            count_init += 1
+        final_joint_angles = None
+        count_final = 0
+        while final_joint_angles is None and count_final < 100:
+            final_joint_angles = robot.get_ik_solution(end_ee_pose)
+            count_final += 1
+        # raise error if no solution found
+        if init_joint_angles is None or final_joint_angles is None:
+            return target_object.get_position()[:2]
+        # init_joint_angles = robot.get_ik_solution(
+        #     start_ee_pose)
+        # final_joint_angles = robot.get_ik_solution(
+        #     end_ee_pose)
+
+        # init_joint_angles = [1.21146268,  1.01414402, -0.32507411, -2.25405194,  1.85247139,  2.81033492,
+        #                      -0.07932621]
+        # final_joint_angles = [0.24571083,  1.46706513,  0.05270085, -0.93101708, -0.0385409,   2.3629429,
+        #                       1.03453555]
+
+        print("init: ", init_joint_angles)
+        print("final:", final_joint_angles)
+
+        robot.move_to_joint_angles(init_joint_angles, using_planner=False)
+
+        ee_vel_vec = get_ee_vel(target_object.get_sim_pose(
+            euler=False), end_ee_pose, 0.4)
+
+        target_ee_velocity = ee_vel_vec
+        time_duration = 3
+        object_id = target_object.id
+        robot.execute_constant_ee_velocity(target_ee_velocity, time_duration, 'push', object_id)
+        # get target_object_position
+        while target_object.is_moving():
+            if not self.realtime:
+                pb.stepSimulation()
+            pass
+        new_position = np.array(target_object.get_sim_pose(euler=False).position.tolist())[:2]
+        # lock new_position to the grid defined by self.discritize
+        new_position = np.around(new_position / self.discritize) * self.discritize
+        return new_position
+
+    def reset(self, robot_arm_location, object_location, target_location, obstacles_location):
+        pass

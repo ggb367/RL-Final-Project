@@ -7,14 +7,16 @@ import matplotlib.pyplot as plt
 grid_env = gym.make('gym_base/GridWorld-v0')
 grid_env.reset()  # reset environment to a new, random state
 
-action = {'mode': 1, 'pos': (3, 1)}
-grid_env.step(action)
+# action = {'mode': 2, 'pos': (0.3, 0.2)}
+# observation, reward, terminated, _, _ = grid_env.step(action)
+# print(reward)
 
 
 print("Starting Q-learning")
-# Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
+Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
 print("Finding Policy")
-# p = policy(Q, grid_env.size)
+p = policy(Q, grid_env.size)
+print(p)
 # for row in range(0, grid_env.size):
 #     for col in range(0, grid_env.size):
 #         print("row: %d, col: %d" % (row, col))
