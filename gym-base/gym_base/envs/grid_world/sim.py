@@ -66,7 +66,7 @@ def get_ee_vel(start_ee_pose, end_ee_pose, vel_mag):
 def get_ik_solution(robot, ee_pose):
     joint_angles = None
     count_init = 0
-    while joint_angles is None and count_init < 10:
+    while joint_angles is None and count_init < 3:
         joint_angles = robot.get_ik_solution(ee_pose)
         count_init += 1
     return joint_angles

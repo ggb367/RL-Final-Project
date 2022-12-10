@@ -19,9 +19,11 @@ class SimModeHandler:
         self.discretize = discretize
         self.realtime = realtime
         self.ikea_z = ikea_z
+        self.debug_id = None
 
     def move(self, mode, dest, target_object, robot):
-        pb.removeAllUserDebugItems()
+        if self.debug_id is not None:
+            pb.removeUserDebugItem(self.debug_id)
         robot.move_to_default_pose(using_planner=False)
 
         if mode == self.Mode.GRASP:
@@ -46,9 +48,16 @@ class SimModeHandler:
         if not self.pos_is_in_range_for_grasp(dest, target_object):
             return
         target_pose = target_object.pose
+        
+        initial_target_pose = target_pose.position.tolist()
+        
         target_pose.position.x = dest[0]
         target_pose.position.y = dest[1]
         target_object.relocate(target_pose)
+        
+        end_target_pose = target_object.get_sim_pose(euler=True).position.tolist()
+        
+        self.debug_id = pb.addUserDebugLine(initial_target_pose, end_target_pose, lineWidth=3, lineColorRGB=[0, 0, 255])
 
     def move_by_poke(self, dest, target_object, robot):
         if not self.pos_is_in_range_for_poke(target_object):
@@ -67,7 +76,7 @@ class SimModeHandler:
         end_ee_pose_in_middle_of_obj = get_pose(target_object_xy, self.ikea_z, robot_ee_orientation)
 
         end_ee_pose = end_ee_pose_in_middle_of_obj
-        pb.addUserDebugLine(start_ee_pose.position.tolist(), end_ee_pose.position.tolist(), lineWidth=3, lineColorRGB=[0, 255, 0])
+        self.debug_id = pb.addUserDebugLine(start_ee_pose.position.tolist(), end_ee_pose.position.tolist(), lineWidth=3, lineColorRGB=[0, 255, 0])
 
         init_joint_angles = get_ik_solution(robot, start_ee_pose)
         final_joint_angles = get_ik_solution(robot, end_ee_pose)
@@ -80,7 +89,7 @@ class SimModeHandler:
         # TODO: why do we have two different distance calculations?
         move_distance_obj_middle_to_dest = np.linalg.norm(np.array(end_ee_pose_in_middle_of_obj.position.tolist()) -
                                                           np.array(end_ee_pose_in_dest.position.tolist()))
-        velocity_mag = 0.4 + 1.0 * move_distance_obj_middle_to_dest / 1.78
+        velocity_mag = 0.2 + 0.8 * move_distance_obj_middle_to_dest / 1.78
         ee_vel_vec = get_ee_vel(start_ee_pose, end_ee_pose, velocity_mag)
         start_to_end_move_distance = np.linalg.norm(np.array(start_ee_pose.position.tolist()) - np.array(end_ee_pose.position.tolist()))
         time_duration = start_to_end_move_distance / np.linalg.norm(ee_vel_vec)
@@ -99,7 +108,7 @@ class SimModeHandler:
             return
 
         start_ee_pose = get_pose([countour_point.x, countour_point.y], self.ikea_z, robot_ee_orientation)
-        pb.addUserDebugLine(start_ee_pose.position.tolist(), end_ee_pose.position.tolist(), lineWidth=3, lineColorRGB=[255, 0, 0])
+        self.debug_id = pb.addUserDebugLine(start_ee_pose.position.tolist(), end_ee_pose.position.tolist(), lineWidth=3, lineColorRGB=[255, 0, 0])
 
         init_joint_angles = get_ik_solution(robot, start_ee_pose)
         final_joint_angles = get_ik_solution(robot, end_ee_pose)
@@ -111,7 +120,7 @@ class SimModeHandler:
         robot.move_to_joint_angles(init_joint_angles, using_planner=False)
 
         move_distance = np.linalg.norm(np.array(start_ee_pose.position.tolist())[:2] - end_ee_pose.position.tolist()[:2])
-        velocity_mag = 0.1 + 0.9 * move_distance / 1.78
+        velocity_mag = 0.1 + 0.4 * move_distance / 1.78
         ee_vel_vec = get_ee_vel(target_object.get_sim_pose(euler=True), end_ee_pose, velocity_mag)
         time_duration = move_distance / np.linalg.norm(ee_vel_vec)
 

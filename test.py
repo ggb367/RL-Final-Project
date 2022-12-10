@@ -16,7 +16,7 @@
 
 
 
-        #         point1 = [x_min, y_min, self.z]
+        #     point1 = [x_min, y_min, self.z]
         # point2 = [x_min, y_max, self.z]
         # point3 = [x_max, y_max, self.z]
         # point4 = [x_max, y_min, self.z]

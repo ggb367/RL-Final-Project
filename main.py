@@ -1,6 +1,6 @@
 import gym
 import gym_base
-from q_learning import q_learning, policy
+from q_learning import q_learning, policy, test_plot
 import matplotlib.pyplot as plt
 import numpy as np
 

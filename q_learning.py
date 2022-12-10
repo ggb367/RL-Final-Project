@@ -1,17 +1,35 @@
 import pdb
 
 import numpy as np
+import random
 
 from tqdm import tqdm
+import pybullet as pb
+
+def test_plot(env):
+    lxy = env.lower_xy_bounds
+    uxy = env.upper_xy_bounds
+    z = env.ikea_z    
+    N = 100
+    for i in range(N):
+        random_x = random.uniform(lxy[0], uxy[0])
+        random_y = random.uniform(lxy[1], uxy[1])
+        index = env.state_to_index([random_x, random_y])
+        point1 = [random_x, random_y, z]
+        point2 = [random_x + 0.01, random_y + 0.01, z]
+        pb.addUserDebugLine(point1, point2, lineWidth=10, lineColorRGB=[0, 0, 255])
 
 
 def q_learning(env):
+    # test_plot(env)
+    # return None, None, None
+
     learning_rate = 0.4
-    epsilon = 0.4
+    epsilon = 0.5
     discount_factor = 0.95
 
     num_of_episodes = 50
-    number_of_iterations = 15
+    number_of_iterations = 40
 
     num_of_rows = env.num_blocks_x
     num_of_columns = env.num_blocks_y
@@ -23,6 +41,7 @@ def q_learning(env):
 
     episode_avg_reward = np.zeros(num_of_episodes)
     episode_num_its = np.zeros(num_of_episodes)
+    debug_id = None
 
     for ep in tqdm(range(num_of_episodes)):
         observation, _ = env.reset(random_start=False)
@@ -30,10 +49,16 @@ def q_learning(env):
         current_state = env.state_to_index(current_xy)
         avg_reward = 0
         for it in range(number_of_iterations):
-            action = get_epsilon_greedy_action(
-                Q, current_state, num_of_actions, epsilon)
+            if debug_id is not None:
+                pb.removeUserDebugItem(debug_id)
 
+            action = get_epsilon_greedy_action(Q, current_state, num_of_actions, epsilon, env)
             env_action = _env_action(action, env)
+
+            position = [env_action['pos'][0], env_action['pos'][1], env.ikea_z]
+            position_ = [position[0]+0.01, position[1]+0.01, env.ikea_z]
+            debug_id = pb.addUserDebugLine(position, position_, lineWidth=10, lineColorRGB=[0, 0, 255])
+
             observation, reward, terminated, _, _ = env.step(env_action)
             avg_reward += reward
 
@@ -42,16 +67,10 @@ def q_learning(env):
                 episode_num_its[ep] = it
                 break
 
-            if env.sim_scenario.target_object.is_moving():
-                print("THE OBJECT DIDN'T STOP MOVING!")
 
             next_xy = observation['object']
             next_state = env.state_to_index(next_xy)
 
-            # point = [next_xy[0], next_xy[1], env.z]
-            # point_ = [next_xy[0] + 0.01, next_xy[1] + 0.01, env.ikea_z]
-            # line = [point, point_]
-            # env.plot_pybullet(lines=[line], color=[255, 0, 0], linewidth=10)
 
             Q[current_state[0], current_state[1], action] += learning_rate * (reward + discount_factor * np.max(
                 Q[next_state[0], next_state[1], :]) - Q[current_state[0], current_state[1], action])
@@ -65,17 +84,20 @@ def q_learning(env):
 
 
 
-def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
+def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon, env):
+
     if np.random.random() < epsilon:
         action = np.random.randint(0, num_actions)
+
+        # mode = np.random.choice([0, 1, 2])
+        # pos = np.array(env.get_target_location())
+        # xy_index = env.state_to_index(pos)
+        # action = 3*245 + mode
     else:
         # if there are multiple actions with the same value, choose one of them randomly
         best_actions = np.argwhere(Q[current_state[0], current_state[1], :] == np.max(
             Q[current_state[0], current_state[1], :])).flatten()
         action = np.random.choice(best_actions)
-        # choose an action that is a multiple of 3, within len of Q
-        # action = np.random.randint(0, len(Q[0, 0, :]), 1)[0]
-        # action = action - (action % 3)
 
     return action
 
@@ -88,13 +110,10 @@ def policy(Q, grid_size):
             policy[row, col] = f'{_env_action(best_action, grid_size)}'
     return policy
 
-
 def _env_action(action, env):
     mode = action % 3
     index = np.floor(action/3)
-    interval = env.discretize
-    x = (index % env.num_blocks_x) * interval
-    y = np.floor(index / env.num_blocks_x) * interval
+    x = (index % env.num_blocks_x) * env.discretize + env.lower_xy_bounds[0]
+    y = (index % env.num_blocks_y) * env.discretize - (env.upper_xy_bounds[1] - env.lower_xy_bounds[1])/2
     pos = [x, y]
-    # pdb.set_trace()
     return {"mode": mode, "pos": pos}
