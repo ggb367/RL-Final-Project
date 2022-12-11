@@ -60,7 +60,7 @@ class SimModeHandler:
         self.debug_id = pb.addUserDebugLine(initial_target_pose, end_target_pose, lineWidth=3, lineColorRGB=[0, 0, 255])
 
     def move_by_poke(self, dest, target_object, robot):
-        if not self.pos_is_in_range_for_poke(target_object):
+        if not self.pos_is_in_range_for_poke(dest, target_object):
             return
 
         robot_ee_orientation = robot.get_ee_pose().orientation
@@ -98,7 +98,7 @@ class SimModeHandler:
 
 
     def move_by_push(self, dest, target_object, robot):
-        if not self.pos_is_in_range_for_push(target_object):
+        if not self.pos_is_in_range_for_push(dest, target_object):
             return
 
         robot_ee_orientation = robot.get_ee_pose().orientation
@@ -106,13 +106,12 @@ class SimModeHandler:
         countour_point = get_contour_point(end_ee_pose, target_object)
         if countour_point is None:
             return
-
+ 
         start_ee_pose = get_pose([countour_point.x, countour_point.y], self.ikea_z, robot_ee_orientation)
         self.debug_id = pb.addUserDebugLine(start_ee_pose.position.tolist(), end_ee_pose.position.tolist(), lineWidth=3, lineColorRGB=[255, 0, 0])
 
         init_joint_angles = get_ik_solution(robot, start_ee_pose)
         final_joint_angles = get_ik_solution(robot, end_ee_pose)
-
 
         if init_joint_angles is None or final_joint_angles is None:
             return
@@ -126,8 +125,6 @@ class SimModeHandler:
 
         robot.execute_constant_ee_velocity(ee_vel_vec, time_duration, 'push',  target_object.id)
 
-
-
     def target_object_is_reachable(self, target_object):
         target_object_pos = target_object.get_sim_pose(euler=True).position
         target_object_xy = [target_object_pos.x, target_object_pos.y]
@@ -138,8 +135,22 @@ class SimModeHandler:
         distance = np.linalg.norm(position)
         return distance <= 0.67 and self.target_object_is_reachable(target_object)
 
-    def pos_is_in_range_for_poke(self, target_object):
+    def pos_is_in_range_for_poke(self, position, target_object):
+        p_x, p_y = position[0], position[1]
+        t_x, t_y = target_object.get_sim_pose(euler=True).position.x, target_object.get_sim_pose(euler=True).position.y
+        x_distance = abs(p_x - t_x)
+        y_distance = abs(p_y - t_y)
+        is_horiz = x_distance <= self.discretize
+        is_vert = y_distance <= self.discretize
+        
         return self.target_object_is_reachable(target_object)
 
-    def pos_is_in_range_for_push(self, target_object):
-        return self.target_object_is_reachable(target_object)
+    def pos_is_in_range_for_push(self, position, target_object):
+        p_x, p_y = position[0], position[1]
+        t_x, t_y = target_object.get_sim_pose(euler=True).position.x, target_object.get_sim_pose(euler=True).position.y
+        x_distance = abs(p_x - t_x)
+        y_distance = abs(p_y - t_y)
+        is_horiz = x_distance <= self.discretize
+        is_vert = y_distance <= self.discretize
+
+        return self.target_object_is_reachable(target_object) 

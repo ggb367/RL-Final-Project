@@ -28,7 +28,7 @@ class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def setup_scenario(self):
-        scenario_id = 1
+        scenario_id = 4
         sim = True
         enable_gui = True
         self.enable_realtime = False
@@ -48,6 +48,8 @@ class GridWorldEnv(gym.Env):
 
         self.lower_xy_bounds = np.array([offset + offset_m, -self.ikea_size[1] / 2 + offset_m])
         self.upper_xy_bounds = np.array([self.ikea_size[0] + offset - offset_m, self.ikea_size[1] / 2 - offset_m])
+
+        self.initial_target_object_pose = self.sim_scenario.target_object.get_sim_pose(euler=True)
 
         self.ikea_z = self.sim_scenario.target_object.get_sim_pose(
             euler=True).position.z
@@ -126,23 +128,44 @@ class GridWorldEnv(gym.Env):
         x = state[0]
         y = state[1]
         # in state, y=0 is the middle of the table, but in the grid, y=0 is the left
-        y = (self.upper_xy_bounds[1]-self.lower_xy_bounds[1])/2 - y
-        x_index = int(x / interval)
-        y_index = int(y / interval)
+        
+
+        y = y + (self.upper_xy_bounds[1]-self.lower_xy_bounds[1])/2
+        x = x - self.lower_xy_bounds[0]
+
+        x_index = int(x / interval)-1
+        y_index = int(y / interval)-1
         return [x_index, y_index]
 
 
     def get_valid_random_location(self):
+        is_reachable = False
         while True:
             location = np.array([random.uniform(self.lower_xy_bounds[0], self.upper_xy_bounds[0]),
                                  random.uniform(self.lower_xy_bounds[1], self.upper_xy_bounds[1])])
             location = np.round(location / self.discretize) * self.discretize
-            is_obs = False
-            for obs in self._obstacles_location:
-                if np.array_equal(location, obs):
-                    is_obs = True
-            if not is_obs:
+            is_reachable = np.linalg.norm(location) <= 0.67
+            is_obs = self.is_within_obstacle(location)
+            # for obs in self._obstacles_location:
+            #     if np.array_equal(location, obs):
+            #         is_obs = True
+            
+            if not is_obs and is_reachable:
                 return location
+
+    def is_within_obstacle(self, location):
+        for obs in self.sim_scenario.all_obstacles:
+            polygon = Polygon(obs.get_corner_pts())
+            
+            object_corner_points = self.sim_scenario.target_object.get_corner_pts()
+            move = np.array([location[0] - self._object_location[0], location[1] - self._object_location[1]])
+            object_corner_points = object_corner_points + move
+            obj_polygon = Polygon(object_corner_points)
+            # pdb.set_trace()
+            if obj_polygon.intersects(polygon):
+                return True
+
+        return False
 
     def reset(self, seed=None, random_start=False, options=None):
         super().reset(seed=seed)
@@ -153,6 +176,10 @@ class GridWorldEnv(gym.Env):
             self._object_location = self.sim_scenario.target_object.get_position()[:2]
         else:
             self._object_location = self.get_valid_random_location()
+            temp_pose = self.sim_scenario.target_object.get_sim_pose(euler=True)
+            temp_pose.position.x = self._object_location[0]
+            temp_pose.position.y = self._object_location[1]
+            self.sim_scenario.target_object.relocate(temp_pose)
 
         self._target_location = [self.sim_scenario.goal_node.x, self.sim_scenario.goal_node.y]
         self.goal_size = self.sim_scenario.goal_radius  # let's assume the goal is a square
@@ -218,18 +245,23 @@ class GridWorldEnv(gym.Env):
         object_is_on_table = self.position_on_table(self._object_location)
 
         index = self.state_to_index(self._object_location)
-        out_of_range = index[0] >= self.num_blocks_x or index[1] >= self.num_blocks_y
+        out_of_range = index[0] >= self.num_blocks_x or index[1] >= self.num_blocks_y or index[0] < 0 or index[1] < 0
+        
+        if out_of_range:
+            self._object_location = self._prev_object_location
+            self.sim_scenario.target_object.relocate(self.initial_target_object_pose)
 
-        is_in_goal_region = self.is_in_goal_region()
+        is_in_goal_region = self.is_in_goal_region(self._object_location)
+
 
         terminated = is_in_goal_region or not object_is_on_table or out_of_range
 
         observation = self._get_obs()
         info = self._get_info()
-
+        
         return observation, reward, terminated, False, info
     
-    def is_in_goal_region(self):
+    def is_in_goal_region(self, loc=[None, None]):
         goal_x = self._target_location[0]
         goal_y = self._target_location[1]
         goal_size = self.sim_scenario.goal_radius # let's assume the goal is a square
@@ -239,8 +271,12 @@ class GridWorldEnv(gym.Env):
         goal_y_min = goal_y - goal_size
         goal_y_max = goal_y + goal_size
         
-        if goal_x_min <= self._object_location[0] <= goal_x_max and \
-            goal_y_min <= self._object_location[1] <= goal_y_max:
+        if loc[0] is None or loc[1] is None:
+            loc[0] = self._object_location[0]
+            loc[1] = self._object_location[1]
+
+        if goal_x_min <= loc[0] <= goal_x_max and \
+            goal_y_min <= loc[1] <= goal_y_max:
             return True
         return False
 
@@ -289,14 +325,15 @@ class GridWorldEnv(gym.Env):
 
     def calc_reward(self):
         reward = 0
+        
+        # if not self.is_in_goal_region():
+        #     object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
+        #     reward -= object_distance_to_goal
 
-        object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
-        reward -= object_distance_to_goal
-
-        if np.array_equal(self._object_location, self._target_location):
+        if self.is_in_goal_region(self._object_location):
             reward += 500
         else:
-            reward -= 500
+            reward -= 333
 
         # if object doesn't move, penalty
         if np.array_equal(self._object_location, self._prev_object_location):
