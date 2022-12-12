@@ -28,16 +28,17 @@ class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def setup_scenario(self):
-        scenario_id = 4
+        self.scenario_id = 4
         sim = True
         enable_gui = True
         self.enable_realtime = False
-        return MultimodalEnv(scenario_id=scenario_id, sim=sim,
+        return MultimodalEnv(scenario_id=self.scenario_id, sim=sim,
                              enable_realtime=self.enable_realtime, enable_gui=enable_gui)
 
     def __init__(self, render_mode=None):
         self.sim_scenario = self.setup_scenario()
 
+        self.timestamp = time.time()
         self.discretize = 0.0635
 
         self.ikea_size = np.array(self.sim_scenario.table_ikea.get_size())[
@@ -56,14 +57,6 @@ class GridWorldEnv(gym.Env):
 
         self.num_blocks_x = int((self.upper_xy_bounds[0] - self.lower_xy_bounds[0])/ self.discretize)
         self.num_blocks_y = int((self.upper_xy_bounds[1] - self.lower_xy_bounds[1]) / self.discretize)
-
-        # self._robot_arm_location = None
-        # self._object_location = None
-        # self._target_location = None
-        # self._obstacles_location = None
-        # self._prev_object_location = None
-        # self._object_graspable = None
-        # self._obstacles_list = None
 
         self.observation_space = spaces.Dict(
             {
