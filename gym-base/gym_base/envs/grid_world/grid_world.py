@@ -23,11 +23,11 @@ class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def setup_scenario(self):
-        scenario_id = 4
+        self.scenario_id = 4
         sim = True
         enable_gui = True
         self.enable_realtime = False
-        return MultimodalEnv(scenario_id=scenario_id, sim=sim,
+        return MultimodalEnv(scenario_id=self.scenario_id, sim=sim,
                              enable_realtime=self.enable_realtime, enable_gui=enable_gui)
 
     def __init__(self, render_mode=None):
@@ -38,6 +38,7 @@ class GridWorldEnv(gym.Env):
         self._object_location = None
         self.sim_scenario = self.setup_scenario()
 
+        self.timestamp = time.time()
         self.discretize = 0.0635
 
         self.ikea_size = np.array(self.sim_scenario.table_ikea.get_size())[

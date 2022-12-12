@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import json
+import time
 
 from tqdm import tqdm
 import pybullet as pb
@@ -25,8 +26,8 @@ def q_learning(env):
     epsilon = 0.5
     discount_factor = 0.95
 
-    num_of_episodes = 5
-    number_of_iterations = 10
+    num_of_episodes = env.num_blocks_x * env.num_blocks_y
+    number_of_iterations = 5
 
     num_of_rows = env.num_blocks_x
     num_of_columns = env.num_blocks_y
@@ -87,6 +88,7 @@ def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
         # if there are multiple actions with the same value, choose one of them randomly
         best_actions = np.argwhere(Q[current_state[0], current_state[1], :] == np.max(
             Q[current_state[0], current_state[1], :])).flatten()
+        
         action = np.random.choice(best_actions)
 
     return action
@@ -113,7 +115,6 @@ class NpEncoder(json.JSONEncoder):
 
 
 def policy(Q, env):
-    print("Q sape: ", Q.shape)
     policy = np.chararray((env.num_blocks_x, env.num_blocks_y), itemsize=100, unicode=True)
     for row in range(0, env.num_blocks_x):
         for col in range(0, env.num_blocks_y):
