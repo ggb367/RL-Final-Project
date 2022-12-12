@@ -150,6 +150,8 @@ class ScenarioHandler:
             # if at goal change title
             if np.array_equal(self.object_location, self.target_location):
                 ax.set_title(f'Object at Goal Location: {self.target_location}')
+            # save the frame
+            plt.savefig(f'scenarios/{self.scenario}_frame_{iteration}.png')
             return ax.patches
         return animate
 

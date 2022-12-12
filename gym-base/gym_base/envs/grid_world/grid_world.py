@@ -23,18 +23,18 @@ class GridWorldEnv(gym.Env):
         self._prev_object_location = None
         self._object_graspable = None
         self.num_steps_taken = 0
-        self.window_size = 512*2
+        self.window_size = 512 * 2
         self.observation_space = spaces.Dict({
             "robot_arm":
-            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
+                spaces.Box(0, self.size - 1, shape=(2,), dtype=int),
             "object":
-            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
+                spaces.Box(0, self.size - 1, shape=(2,), dtype=int),
             "target":
-            spaces.Box(0, self.size - 1, shape=(2, ), dtype=int),
+                spaces.Box(0, self.size - 1, shape=(2,), dtype=int),
             "obstacles":
-            spaces.Sequence(spaces.Box(0, self.size - 1, shape=(2, ), dtype=int)),
+                spaces.Sequence(spaces.Box(0, self.size - 1, shape=(2,), dtype=int)),
             "object_graspable":
-            spaces.MultiBinary(1),
+                spaces.MultiBinary(1),
         })
         self.action_space = spaces.Dict({"mode": spaces.Discrete(3),
                                          "pos": spaces.Tuple((spaces.Discrete(self.size),
@@ -64,8 +64,8 @@ class GridWorldEnv(gym.Env):
     def _get_info(self):
         return {
             "distance":
-            np.linalg.norm(self._object_location -
-                           self._target_location, ord=1)
+                np.linalg.norm(self._object_location -
+                               self._target_location, ord=1)
         }
 
     def get_valid_random_location(self):
@@ -81,8 +81,7 @@ class GridWorldEnv(gym.Env):
             if not is_obs:
                 return location
 
-
-    def reset(self, seed=None, random_start = False, options=None):
+    def reset(self, seed=None, random_start=False, options=None):
         super().reset(seed=seed)
 
         self._robot_arm_location = self.scenario.robot_arm_location
@@ -107,7 +106,7 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, info
-    
+
     def display_scenario(self, policy=None, Q=None):
         self.scenario.display(policy=policy, Q=Q)
 
@@ -135,25 +134,6 @@ class GridWorldEnv(gym.Env):
             self._render_frame()
 
         return observation, reward, terminated, False, info
-
-    def object_under_tunnel(self):
-        """
-        Check to see if the object is under the tunnel.
-        """
-        #TODO: add environment with tunnel then check to see if object is under tunnel
-        return False
-
-    def object_off_table(self):
-        """
-        Check to see if the object is off the table.
-        """
-        # return true if object is outside of self.size
-        # TODO: should add a table shape variable to the environment?
-        if self._object_location[0] < 0 or self._object_location[0] >= self.size:
-            return True
-        if self._object_location[1] < 0 or self._object_location[1] >= self.size:
-            return True
-        return False
 
     def a_star_distance(self, start, goal):
         """
@@ -200,12 +180,6 @@ class GridWorldEnv(gym.Env):
         # if object doesn't move, penalty
         if np.array_equal(self._object_location, self._prev_object_location):
             reward -= 1000
-        # check to see if object is under tunnel
-        # if self.object_under_tunnel():  # TODO
-        #     reward -= self.mode_handler.reward.UNDER_TUNNEL  # TODO: making it -1000 might make it unstable, need to test it
-        # check to see if object is off table
-        # if self.object_off_table():  # TODO
-        #     reward -= self.mode_handler.reward.OFF_TABLE  # TODO: making it -1000 might make it unstable, need to test it
         return reward
 
     def render(self):

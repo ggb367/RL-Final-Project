@@ -7,7 +7,7 @@ def q_learning(env):
     epsilon = 0.4  # randomness factor
     discount_factor = 0.95
 
-    num_of_episodes = 6000
+    num_of_episodes = 4000
     number_of_iterations = 15
 
     num_of_rows = env.size
