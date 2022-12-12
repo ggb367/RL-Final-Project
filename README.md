@@ -11,3 +11,5 @@ pip install -e gym-base
 
 ## Run
 ```python main.py```
+
+Pictures and gifs are saved to scenarios/ directory.
