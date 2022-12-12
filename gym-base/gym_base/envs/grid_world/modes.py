@@ -1,5 +1,3 @@
-import pdb
-
 import numpy as np
 from shapely.geometry import LineString, Point
 
