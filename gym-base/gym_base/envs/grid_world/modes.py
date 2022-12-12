@@ -12,10 +12,6 @@ class ModeHandler:
         PUSH = 1
         POKE = 2
 
-    # TODO: These are the maximum range an action can happen.
-    # Depending where the robot arm is placed and how far
-    # The start and initial are from the robot arm
-    # These ranges vary. The numbers are also arbitraty for the moment
     class Range:
         def __init__(self, scenario_num):
             self.scenario_num = scenario_num
@@ -25,6 +21,7 @@ class ModeHandler:
             self.PUSH_DROPOFF = None
             self.POKE = None
             self.instantiate_range()
+
         def instantiate_range(self):
             if self.scenario_num == 1:
                 self.GRASP = 10
@@ -97,8 +94,8 @@ class ModeHandler:
         if dist_to_goal < self.range.POKE_DROPOFF:  # TODO: make this dependent on the scenario
             reach_goal_prob = 1.0
         else:
-            reach_goal_prob = 1.0 / (1 + np.exp(-(dist_to_goal-np.sqrt(9))))
-        extra_prob = (1-reach_goal_prob) / (num_candids - 1)
+            reach_goal_prob = 1.0 / (1 + np.exp(-(dist_to_goal - np.sqrt(9))))
+        extra_prob = (1 - reach_goal_prob) / (num_candids - 1)
         probs = [reach_goal_prob] + [extra_prob] * (num_candids - 1)
         return random.choices(candids, probs, k=1)[0]
 
@@ -112,7 +109,7 @@ class ModeHandler:
             return start
         # make probablity range dependent on distance to goal
         dist_to_goal = np.linalg.norm(dest - start)
-        if dist_to_goal < self.range.PUSH_DROPOFF: # TODO: make this dependent on the scenario
+        if dist_to_goal < self.range.PUSH_DROPOFF:  # TODO: make this dependent on the scenario
             reach_goal_prob = 1.0
         else:
             reach_goal_prob = 1.0 / (1 + np.exp(-(dist_to_goal - np.sqrt(9))))
@@ -123,7 +120,7 @@ class ModeHandler:
     def pos_in_range_for_poke_push(self, start, dest, range):
         robot_to_current = np.linalg.norm(start - self.robot_arm_location)
         current_to_dest = np.linalg.norm(start - dest)
-        #check if obstacles are in the way
+        # check if obstacles are in the way
         if self.is_obstacle(dest):
             return False
         # check on line for obstacles

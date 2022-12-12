@@ -12,11 +12,6 @@ print("Starting Q-learning")
 Q, episode_avg_reward, episode_num_its = q_learning(grid_env)
 print("Finding Policy")
 p = policy(Q, grid_env.size)
-# for row in range(0, grid_env.size):
-#     for col in range(0, grid_env.size):
-#         print("row: %d, col: %d" % (row, col))
-#         print(Q[col, row])
-#     print()
 
 # # plot the average reward per episode
 plt.figure(figsize=(25, 20), dpi=60)
@@ -36,16 +31,7 @@ plt.ylabel('Number of Iterations', fontsize=30)
 plt.xticks(fontsize=25)
 plt.yticks(fontsize=25)
 plt.title('Number of Iterations per Episode', fontsize=40)
-# increase font size
 
 print("Displaying Policy")
-plt.show()
-# display the policy, passing Q and p print them on the graph
+plt.show(block=False)
 grid_env.animate_scenario(p)
-
-# extra code:
-# to create an action and test it:
-# action = {'mode': 0, 'pos': (3, 1)} where mode is 0 for grasp, 1 for push, 2 for poke
-# observation, reward, terminated, _, _ = grid_env.step(action=action)
-# print('Reward: %f' % reward)
-# print('Observation: %s' % observation)
