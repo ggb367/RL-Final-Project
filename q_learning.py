@@ -1,5 +1,3 @@
-import pdb
-
 import numpy as np
 import random
 import json
@@ -7,10 +5,11 @@ import json
 from tqdm import tqdm
 import pybullet as pb
 
+
 def test_plot(env):
     lxy = env.lower_xy_bounds
     uxy = env.upper_xy_bounds
-    z = env.ikea_z    
+    z = env.ikea_z
     N = 100
     for i in range(N):
         random_x = random.uniform(lxy[0], uxy[0])
@@ -22,9 +21,6 @@ def test_plot(env):
 
 
 def q_learning(env):
-    # test_plot(env)
-    # return None, None, None
-
     learning_rate = 0.4
     epsilon = 0.5
     discount_factor = 0.95
@@ -54,11 +50,11 @@ def q_learning(env):
             if debug_id is not None:
                 pb.removeUserDebugItem(debug_id)
 
-            action = get_epsilon_greedy_action(Q, current_state, num_of_actions, epsilon, env)
+            action = get_epsilon_greedy_action(Q, current_state, num_of_actions, epsilon)
             env_action = _env_action(action, env)
 
             position = [env_action['pos'][0], env_action['pos'][1], env.ikea_z]
-            position_ = [position[0]+0.01, position[1]+0.01, env.ikea_z]
+            position_ = [position[0] + 0.01, position[1] + 0.01, env.ikea_z]
             debug_id = pb.addUserDebugLine(position, position_, lineWidth=10, lineColorRGB=[0, 0, 255])
 
             observation, reward, terminated, _, _ = env.step(env_action)
@@ -66,11 +62,8 @@ def q_learning(env):
             next_xy = observation['object']
             next_state = env.state_to_index(next_xy)
 
-            # if current_state[0]
-
             Q[current_state[0], current_state[1], action] += learning_rate * (reward + discount_factor * np.max(
                 Q[next_state[0], next_state[1], :]) - Q[current_state[0], current_state[1], action])
-        
 
             current_state = next_state
             avg_reward += reward
@@ -87,14 +80,9 @@ def q_learning(env):
     return Q, episode_avg_reward, episode_num_its
 
 
-
-def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon, env):
+def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon):
     if np.random.random() < epsilon:
         action = np.random.randint(0, num_actions)
-        # mode = np.random.choice([0, 1, 2])
-        # pos = np.array(env.get_target_location())
-        # xy_index = env.state_to_index(pos)
-        # action = 3*245 + mode
     else:
         # if there are multiple actions with the same value, choose one of them randomly
         best_actions = np.argwhere(Q[current_state[0], current_state[1], :] == np.max(
@@ -106,9 +94,9 @@ def get_epsilon_greedy_action(Q, current_state, num_actions, epsilon, env):
 
 def _env_action(action, env):
     mode = action % 3
-    index = np.floor(action/3)
+    index = np.floor(action / 3)
     x = (index % env.num_blocks_x) * env.discretize + env.lower_xy_bounds[0]
-    y = (index % env.num_blocks_y) * env.discretize - (env.upper_xy_bounds[1] - env.lower_xy_bounds[1])/2
+    y = (index % env.num_blocks_y) * env.discretize - (env.upper_xy_bounds[1] - env.lower_xy_bounds[1]) / 2
     pos = [x, y]
     return {"mode": mode, "pos": pos}
 
@@ -133,6 +121,3 @@ def policy(Q, env):
             enved_action = _env_action(best_action, env)
             policy[row, col] = json.dumps(enved_action, cls=NpEncoder)
     return policy
-
-
-

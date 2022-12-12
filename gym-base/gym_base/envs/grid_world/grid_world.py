@@ -1,27 +1,22 @@
-import time
-
 import gym
+import gym_base
 from gym import spaces
-import pygame
 import numpy as np
 import random
-import networkx as nx
-import pdb
 import pybullet as pb
-import matplotlib.pyplot as plt
 
 from shapely.geometry import Polygon, LineString
-# import shapely affine
-from shapely import affinity
 
-from npm_base import Point, Quaternion, Pose, convert_orientation
 from robot_sim_envs import MultimodalEnv
-from multimodal_planning_v2 import PathPlanner
 
 from gym_base.envs.grid_world.modes import SimModeHandler
-from gym_base.envs.grid_world.scenarios import ScenarioHandler
 
-from gym_base.envs.grid_world.sim import get_contour_point, get_pose, get_ee_vel
+
+def within_radius(node, tuple_list, radius):
+    for tuple in tuple_list:
+        if np.linalg.norm(np.array(node) - np.array(tuple)) < radius:
+            return True
+    return False
 
 
 class GridWorldEnv(gym.Env):
@@ -36,14 +31,19 @@ class GridWorldEnv(gym.Env):
                              enable_realtime=self.enable_realtime, enable_gui=enable_gui)
 
     def __init__(self, render_mode=None):
+        self._prev_object_location = None
+        self._obstacles_location = None
+        self.goal_size = None
+        self._target_location = None
+        self._object_location = None
         self.sim_scenario = self.setup_scenario()
 
         self.discretize = 0.0635
 
         self.ikea_size = np.array(self.sim_scenario.table_ikea.get_size())[
-            :2]  # only want x and y
+                         :2]  # only want x and y
 
-        offset = self.sim_scenario.table_ikea.node.x - self.ikea_size[0]/2
+        offset = self.sim_scenario.table_ikea.node.x - self.ikea_size[0] / 2
         offset_m = 0
 
         self.lower_xy_bounds = np.array([offset + offset_m, -self.ikea_size[1] / 2 + offset_m])
@@ -54,28 +54,20 @@ class GridWorldEnv(gym.Env):
         self.ikea_z = self.sim_scenario.target_object.get_sim_pose(
             euler=True).position.z
 
-        self.num_blocks_x = int((self.upper_xy_bounds[0] - self.lower_xy_bounds[0])/ self.discretize)
+        self.num_blocks_x = int((self.upper_xy_bounds[0] - self.lower_xy_bounds[0]) / self.discretize)
         self.num_blocks_y = int((self.upper_xy_bounds[1] - self.lower_xy_bounds[1]) / self.discretize)
-
-        # self._robot_arm_location = None
-        # self._object_location = None
-        # self._target_location = None
-        # self._obstacles_location = None
-        # self._prev_object_location = None
-        # self._object_graspable = None
-        # self._obstacles_list = None
 
         self.observation_space = spaces.Dict(
             {
                 "object":
-                spaces.Box(low=self.lower_xy_bounds,
-                           high=self.upper_xy_bounds, shape=(2,), dtype=float),
+                    spaces.Box(low=self.lower_xy_bounds,
+                               high=self.upper_xy_bounds, shape=(2,), dtype=float),
                 "target":
-                spaces.Box(low=self.lower_xy_bounds,
-                           high=self.upper_xy_bounds, shape=(2,), dtype=float),
+                    spaces.Box(low=self.lower_xy_bounds,
+                               high=self.upper_xy_bounds, shape=(2,), dtype=float),
                 "obstacles":
-                spaces.Sequence(
-                    spaces.Box(low=self.lower_xy_bounds, high=self.upper_xy_bounds, shape=(2,), dtype=float)),
+                    spaces.Sequence(
+                        spaces.Box(low=self.lower_xy_bounds, high=self.upper_xy_bounds, shape=(2,), dtype=float)),
             })
 
         self.action_space = spaces.Dict(
@@ -93,7 +85,7 @@ class GridWorldEnv(gym.Env):
         self.render_mode = render_mode
         self.window = None
         self.clock = None
-    
+
     def plot_bounds(self):
         x_min, y_min = self.lower_xy_bounds[0], self.lower_xy_bounds[1]
         x_max, y_max = self.upper_xy_bounds[0], self.upper_xy_bounds[1]
@@ -122,52 +114,41 @@ class GridWorldEnv(gym.Env):
                                self._target_location, ord=1)
         }
 
-
     def state_to_index(self, state):
         interval = self.discretize
         x = state[0]
         y = state[1]
         # in state, y=0 is the middle of the table, but in the grid, y=0 is the left
-        
 
-        y = y + (self.upper_xy_bounds[1]-self.lower_xy_bounds[1])/2
+        y = y + (self.upper_xy_bounds[1] - self.lower_xy_bounds[1]) / 2
         x = x - self.lower_xy_bounds[0]
 
-        x_index = int(x / interval)-1
-        y_index = int(y / interval)-1
+        x_index = int(x / interval) - 1
+        y_index = int(y / interval) - 1
         return [x_index, y_index]
 
-
     def get_valid_random_location(self):
-        is_reachable = False
         while True:
             location = np.array([random.uniform(self.lower_xy_bounds[0], self.upper_xy_bounds[0]),
                                  random.uniform(self.lower_xy_bounds[1], self.upper_xy_bounds[1])])
             location = np.round(location / self.discretize) * self.discretize
             is_reachable = np.linalg.norm(location) <= 0.67
             is_obs = self.is_within_obstacle(location)
-            # for obs in self._obstacles_location:
-            #     if np.array_equal(location, obs):
-            #         is_obs = True
-            
             if not is_obs and is_reachable:
                 return location
 
     def is_within_obstacle(self, location):
         for obs in self.sim_scenario.all_obstacles:
             polygon = Polygon(obs.get_corner_pts())
-            
             object_corner_points = self.sim_scenario.target_object.get_corner_pts()
             move = np.array([location[0] - self._object_location[0], location[1] - self._object_location[1]])
             object_corner_points = object_corner_points + move
             obj_polygon = Polygon(object_corner_points)
-            # pdb.set_trace()
             if obj_polygon.intersects(polygon):
                 return True
-
         return False
 
-    def reset(self, seed=None, random_start=False, options=None):
+    def reset(self, seed=None, random_start=False):
         super().reset(seed=seed)
         self.sim_scenario.reset()
         pb.removeAllUserDebugItems()
@@ -203,14 +184,14 @@ class GridWorldEnv(gym.Env):
         self.plot_goal_reigon()
 
         return observation, info
-    
+
     def get_target_location(self):
         return self._target_location
 
     def plot_goal_reigon(self):
         goal_x = self._target_location[0]
         goal_y = self._target_location[1]
-        goal_size = self.sim_scenario.goal_radius # let's assume the goal is a square
+        goal_size = self.sim_scenario.goal_radius  # let's assume the goal is a square
         goal_x_min = goal_x - goal_size
         goal_x_max = goal_x + goal_size
         goal_y_min = goal_y - goal_size
@@ -227,114 +208,54 @@ class GridWorldEnv(gym.Env):
         for line in [line1, line2, line3, line4]:
             pb.addUserDebugLine(line[0], line[1], lineWidth=3, lineColorRGB=[0, 255, 0])
 
-
     def position_on_table(self, pos):
         return self.lower_xy_bounds[0] <= pos[0] <= self.upper_xy_bounds[0] and \
             self.lower_xy_bounds[1] <= pos[1] <= self.upper_xy_bounds[1]
 
-
     def step(self, action):
         mode = self._action_mode[action["mode"]]
         dest = np.array(action["pos"])
-
         self._prev_object_location = self._object_location.copy()
 
-        self._object_location = self.mode_handler.move(mode, dest, self.sim_scenario.target_object, self.sim_scenario.robot)
-
+        self._object_location = self.mode_handler.move(mode, dest, self.sim_scenario.target_object,
+                                                       self.sim_scenario.robot)
         reward = self.calc_reward()
         object_is_on_table = self.position_on_table(self._object_location)
-
         index = self.state_to_index(self._object_location)
         out_of_range = index[0] >= self.num_blocks_x or index[1] >= self.num_blocks_y or index[0] < 0 or index[1] < 0
-        
         if out_of_range:
             self._object_location = self._prev_object_location
             self.sim_scenario.target_object.relocate(self.initial_target_object_pose)
-
         is_in_goal_region = self.is_in_goal_region(self._object_location)
 
-
         terminated = is_in_goal_region or not object_is_on_table or out_of_range
-
         observation = self._get_obs()
         info = self._get_info()
-        
         return observation, reward, terminated, False, info
-    
+
     def is_in_goal_region(self, loc=[None, None]):
         goal_x = self._target_location[0]
         goal_y = self._target_location[1]
-        goal_size = self.sim_scenario.goal_radius # let's assume the goal is a square
-        
+        goal_size = self.sim_scenario.goal_radius  # let's assume the goal is a square
         goal_x_min = goal_x - goal_size
         goal_x_max = goal_x + goal_size
         goal_y_min = goal_y - goal_size
         goal_y_max = goal_y + goal_size
-        
         if loc[0] is None or loc[1] is None:
             loc[0] = self._object_location[0]
             loc[1] = self._object_location[1]
 
         if goal_x_min <= loc[0] <= goal_x_max and \
-            goal_y_min <= loc[1] <= goal_y_max:
+                goal_y_min <= loc[1] <= goal_y_max:
             return True
         return False
 
-    def within_radius(self, node, tuple_list, radius):
-        for tuple in tuple_list:
-            if np.linalg.norm(np.array(node) - np.array(tuple)) < radius:
-                return True
-        return False
-
-    def a_star_distance(self, start, goal):
-        x_nodes = np.arange(
-            self.lower_xy_bounds[0],
-            self.upper_xy_bounds[0],
-            self.discretize)
-        y_nodes = np.arange(
-            self.lower_xy_bounds[1],
-            self.upper_xy_bounds[1],
-            self.discretize)
-        G = nx.grid_2d_graph(
-            x_nodes, y_nodes)
-
-        obs_list = [tuple(item) for item in self._obstacles_location]
-
-        nodes = list(G.nodes)
-        for node in nodes:
-            if self.within_radius(node, obs_list, self.discretize):
-                G.remove_node(node) # TODO: this shouldn't have the if, right?
-                for neighbor in G.neighbors(node):
-                    if neighbor in obs_list:
-                        G.remove_edge(node, neighbor)
-
-        start_node = min(G.nodes(), key=lambda x: np.linalg.norm(
-            np.array(x) - np.array(start)))
-        G.add_node(tuple(start))
-        G.add_edge(tuple(start), start_node)
-
-        goal_node = min(G.nodes(), key=lambda x: np.linalg.norm(
-            np.array(x) - np.array(goal)))
-
-        G.add_edge(tuple(goal), goal_node)
-        G.add_node(tuple(goal))
-
-        path = nx.astar_path(G, tuple(start), tuple(goal))
-
-        return len(path)
-
     def calc_reward(self):
         reward = 0
-        
-        # if not self.is_in_goal_region():
-        #     object_distance_to_goal = self.a_star_distance(self._object_location, self._target_location)
-        #     reward -= object_distance_to_goal
-
         if self.is_in_goal_region(self._object_location):
             reward += 500
         else:
             reward -= 333
-
         # if object doesn't move, penalty
         if np.array_equal(self._object_location, self._prev_object_location):
             reward -= 1000
